@@ -44,8 +44,15 @@
 #define PIN_LED 2
 
 // Phase 2 only, left unconnected in v1. See docs/06-can-obd.md.
+// GPIO 5 is a strapping pin and must be high at boot; a CAN transceiver idles
+// its TX input high, so this works, but verify the board still boots with the
+// transceiver attached before trusting it.
 #define PIN_CAN_TX 5
 #define PIN_CAN_RX 18
+// Load switch for the transceiver rail. Not a standby pin: with the engine off
+// the transceiver must be electrically absent from the bus, and the only way to
+// be sure of that is no supply at all (docs/06 section 6.4).
+#define PIN_CAN_EN 32
 
 #endif
 

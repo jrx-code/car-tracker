@@ -39,7 +39,7 @@ Różnice istotne dla projektu opisuje `10-pojazdy.md`.
 ## 1.4 Poza zakresem v1 (świadome decyzje)
 
 - **Zapis na magistralę CAN.** Urządzenie nigdy nie wysyła ramek do auta. Odczyt CAN
-  jest rozważony jako faza 2, opisany w `05-can-obd.md`, ale w v1 nie ma
+  jest rozważony jako faza 2, opisany w `06-can-obd.md`, ale w v1 nie ma
   transceivera podłączonego do pinów 6/14.
 - **Immobilizer, zdalne unieruchamianie.** Nie robimy. Ingerencja w układy
   bezpieczeństwa auta i ryzyko prawne przy sprzedaży pojazdu.

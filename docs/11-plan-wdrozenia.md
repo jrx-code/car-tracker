@@ -66,7 +66,9 @@ Dopiero po 30 dniach bezawaryjnej pracy w ND1. Ten sam zestaw kroków M1-M5.
 
 ## Faza 5: rozwój
 
-- Odczyt CAN w trybie pasywnym, najpierw ND1, warunki w rozdziale 06.
+- Odczyt CAN, najpierw ND1, kroki K1-K6 i warunki wejścia w rozdziale 06.
+  Nasłuch pasywny przez cały czas, zapytania OBD wyłącznie przy pracującym
+  silniku, transceiver odcięty load switchem na postoju.
 - Wymiana NEO-6M na odbiornik wielosystemowy, jeśli pomiary z pola pokażą, że fix
   gubi się w mieście. Decyzja z danych, nie z założenia.
 - Automatyzacje HA: powiadomienie o niskim napięciu ND1, geofence garaż,
