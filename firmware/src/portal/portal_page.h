@@ -118,8 +118,16 @@ line-height:1.45}
           <span class="help">Litery, cyfry, - i _. Np. nd1</span>
           <input id="vehicle_id"><span class="err-msg"></span></label>
         <label><span class="name">Nazwa opisowa</span>
-          <span class="help">Tylko do wyswietlania w tym panelu</span>
+          <span class="help">Widoczna w tym panelu i na stronie floty</span>
           <input id="vehicle_name"></label>
+        <label><span class="name">Numer rejestracyjny</span>
+          <span class="help">Np. ZS 12345. Puste, gdy plytka nie siedzi w aucie</span>
+          <input id="plate" maxlength="15" style="text-transform:uppercase">
+          <span class="err-msg"></span></label>
+        <label><span class="name">VIN</span>
+          <span class="help">Dokladnie 17 znakow, bez liter I, O i Q. Moze byc puste</span>
+          <input id="vin" maxlength="17" style="text-transform:uppercase">
+          <span class="err-msg"></span></label>
         <label><span class="name">Hostname / mDNS</span>
           <span class="help">Pod ta nazwa urzadzenie jest widoczne w sieci</span>
           <input id="hostname"></label>
@@ -335,6 +343,11 @@ const RULES={
   vehicle_id:v=>!v?'Nie moze byc puste, tworzy temat MQTT':
     (/^[A-Za-z0-9_-]+$/.test(v)?(v.length<16?'':'Maksymalnie 15 znakow')
      :'Dozwolone litery, cyfry, - i _'),
+  // Both may be blank; a value that is present must be a value that can be real.
+  vin:v=>!v?'':(v.length===17?(/^[A-HJ-NPR-Z0-9]+$/i.test(v)?''
+    :'Bez liter I, O i Q, tylko cyfry i pozostale litery')
+    :('VIN ma 17 znakow, wpisano '+v.length)),
+  plate:v=>(!v||v.length<=15)?'':'Maksymalnie 15 znakow',
   mqtt_host:v=>v?'':'Nie moze byc puste',
   mqtt_port:v=>(v>=1&&v<=65535)?'':'Zakres 1-65535',
   mqtt_keepalive:v=>(v>=10&&v<=600)?'':'Zakres 10-600 s',

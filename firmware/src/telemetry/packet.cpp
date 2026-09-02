@@ -84,9 +84,13 @@ size_t buildEvent(const char* ev, uint32_t seq, uint32_t ts, const PosRecord* po
   return serializeJson(doc, out, out_len);
 }
 
-size_t buildInfo(const transport::LinkInfo& link, const char* fw_version,
-                 const char* modem_name, const char* ip, char* out, size_t out_len) {
+size_t buildInfo(const transport::LinkInfo& link, const settings::Settings& id,
+                 const char* fw_version, const char* modem_name, const char* ip,
+                 char* out, size_t out_len) {
   JsonDocument doc;
+  doc["name"] = id.vehicle_name;
+  if (id.plate[0]) doc["plate"] = id.plate;
+  if (id.vin[0]) doc["vin"] = id.vin;
   doc["fw"] = fw_version;
   doc["modem"] = modem_name;
   doc["imei"] = link.imei;

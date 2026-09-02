@@ -340,8 +340,9 @@ bool connectAndAnnounce() {
     return false;
   }
   transport::publish(t_status, "online", true);
-  const size_t n = packet::buildInfo(transport::info(), kFwVersion, kModemName,
-                                     portal::ipAddress().c_str(), buf, sizeof(buf));
+  const size_t n = packet::buildInfo(transport::info(), settings::get(), kFwVersion,
+                                     kModemName, portal::ipAddress().c_str(), buf,
+                                     sizeof(buf));
   if (n) transport::publish(t_info, buf, true);
   transport::subscribe(t_cfg);
   transport::subscribe(t_cmd);

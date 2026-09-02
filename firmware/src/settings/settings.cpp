@@ -28,6 +28,8 @@ void loadDefaults() {
 
   copyStr(s.vehicle_id, kIdLen, DEFAULT_VEHICLE_ID);
   copyStr(s.vehicle_name, kStrLen, DEFAULT_VEHICLE_ID);
+  copyStr(s.plate, kPlateLen, DEFAULT_PLATE);
+  copyStr(s.vin, kVinLen, DEFAULT_VIN);
   copyStr(s.hostname, kStrLen, "cartracker");
 
   s.wifi_enabled = true;
@@ -165,6 +167,8 @@ bool applyJson(const String& json, String& error) {
 
   applyStr(doc, "vehicle_id", p->vehicle_id, kIdLen);
   applyStr(doc, "vehicle_name", p->vehicle_name, kStrLen);
+  applyStr(doc, "plate", p->plate, kPlateLen);
+  applyStr(doc, "vin", p->vin, kVinLen);
   applyStr(doc, "hostname", p->hostname, kStrLen);
 
   if (doc["wifi_enabled"].is<bool>()) p->wifi_enabled = doc["wifi_enabled"];
@@ -239,6 +243,26 @@ bool applyJson(const String& json, String& error) {
       return false;
     }
   }
+  // Both may be left empty: a bench board belongs to no car yet. What is
+  // refused is a value that is present but cannot be right, because a
+  // half-typed VIN on the fleet page is worse than a blank one.
+  if (p->vin[0] != '\0') {
+    if (strlen(p->vin) != 17) {
+      error = "vin must be exactly 17 characters, or empty";
+      return false;
+    }
+    for (char* c = p->vin; *c; c++) {
+      *c = toupper(*c);
+      if (!isalnum(*c) || *c == 'I' || *c == 'O' || *c == 'Q') {
+        // I, O and Q are excluded by ISO 3779 so they cannot be confused with
+        // 1 and 0. A VIN containing one was mistyped.
+        error = "vin accepts digits and letters except I, O and Q";
+        return false;
+      }
+    }
+  }
+  for (char* c = p->plate; *c; c++) *c = toupper(*c);
+
   if (p->mqtt_host[0] == '\0') {
     error = "mqtt_host must not be empty";
     return false;
@@ -281,6 +305,8 @@ String toJson() {
   JsonDocument doc;
   doc["vehicle_id"] = s.vehicle_id;
   doc["vehicle_name"] = s.vehicle_name;
+  doc["plate"] = s.plate;
+  doc["vin"] = s.vin;
   doc["hostname"] = s.hostname;
 
   doc["wifi_enabled"] = s.wifi_enabled;

@@ -8,6 +8,12 @@
 // cars (assumption Z6). Set it once per device with the set_id command.
 #define DEFAULT_VEHICLE_ID "nd1"
 
+// Registration and VIN of the car this board is fitted to. Both are editable in
+// the portal; these are only what a blank device starts with. Leave empty on a
+// bench board that is not in a car yet.
+#define DEFAULT_PLATE ""
+#define DEFAULT_VIN ""
+
 // --- MQTT broker ----------------------------------------------------------
 #define MQTT_HOST "mqtt.example.lan"
 #define MQTT_PORT 8883

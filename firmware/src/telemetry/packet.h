@@ -4,6 +4,7 @@
 #include <Arduino.h>
 
 #include "modem/transport.h"
+#include "settings/settings.h"
 #include "state.h"
 
 namespace packet {
@@ -19,9 +20,12 @@ size_t buildEvent(const char* ev, uint32_t seq, uint32_t ts, const PosRecord* po
                   char* out, size_t out_len);
 
 // `ip` lets the aggregator reach the device's own portal; without it the hub
-// would have to guess an address that comes from DHCP.
-size_t buildInfo(const transport::LinkInfo& link, const char* fw_version,
-                 const char* modem_name, const char* ip, char* out, size_t out_len);
+// would have to guess an address that comes from DHCP. The identity fields go
+// out here too, so the fleet page labels a car from the device itself instead
+// of from a second registry someone has to remember to update.
+size_t buildInfo(const transport::LinkInfo& link, const settings::Settings& id,
+                 const char* fw_version, const char* modem_name, const char* ip,
+                 char* out, size_t out_len);
 
 size_t buildBatch(const PosRecord* recs, uint16_t n, char* out, size_t out_len,
                   bool compact);

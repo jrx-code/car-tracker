@@ -11,7 +11,7 @@ Identyfikator jest w NVS, nie w kompilacji, zgodnie z założeniem Z6.
 | Temat | Kierunek | QoS | Retained | Opis |
 |---|---|---|---|---|
 | `cartracker/<id>/status` | urządzenie -> HA | 1 | tak | `online` / `offline`. `offline` jest ustawione jako LWT brokera |
-| `cartracker/<id>/info` | urządzenie -> HA | 1 | tak | dane stałe: wersja firmware, model modemu, IMEI, ICCID, MAC |
+| `cartracker/<id>/info` | urządzenie -> HA | 1 | tak | dane stałe: tożsamość pojazdu, wersja firmware, model modemu, IMEI, ICCID, MAC, adres panelu (5.9) |
 | `cartracker/<id>/pos` | urządzenie -> HA | 1 | nie | pojedyncza pozycja |
 | `cartracker/<id>/tel` | urządzenie -> HA | 1 | nie | telemetria bez pozycji (napięcie, zasięg, temperatura) |
 | `cartracker/<id>/evt` | urządzenie -> HA | 1 | nie | zdarzenia: start jazdy, koniec jazdy, alarm ruchu, hibernacja |
@@ -162,3 +162,35 @@ pomijane przy braku zmiany. Wtedy pakiet schodzi poniżej 120 bajtów.
 JSON zostaje mimo wszystko zamiast formatu binarnego, bo cała reszta domu mówi JSON-em
 przez MQTT i debugowanie binarnego protokołu w aucie w trasie kosztuje więcej niż
 oszczędność transferu, która i tak mieści się w pakiecie danych.
+
+## 5.9 Dane stałe (`info`)
+
+```json
+{
+  "name": "MX-5 ND1",
+  "plate": "ZS12345",
+  "vin": "JM1NDAM75M0300001",
+  "fw": "0.1.0",
+  "modem": "none-wifi",
+  "imei": "AA:BB:CC:DD:EE:FF",
+  "iccid": "",
+  "net": "WIFI",
+  "ip": "192.0.2.42"
+}
+```
+
+Retained, publikowane raz po połączeniu z brokerem.
+
+`name`, `plate` i `vin` to tożsamość auta, w którym siedzi płytka. Trzymamy ją
+w NVS urządzenia, a nie w agregatorze, bo wtedy jest jedno miejsce do zmiany
+i strona floty podpisuje auto sama, bez drugiego rejestru do pilnowania.
+`plate` i `vin` bywają puste — płytka na biurku nie należy jeszcze do żadnego auta.
+Firmware odrzuca VIN o długości innej niż 17 znaków oraz taki z literami I, O, Q
+(ISO 3779), więc pusty znaczy „nie podano", a nie „nie udało się wpisać".
+
+`ip` pozwala agregatorowi proxować panel urządzenia pod `/device/<id>/`.
+Bez niego hub musiałby zgadywać adres przydzielony z DHCP.
+
+Agregator nadpisuje tylko te pola, które w wiadomości faktycznie są. Starsze
+firmware, które nie zna `plate` ani `vin`, nie wyczyści wartości zgłoszonej
+wcześniej przez nowsze.

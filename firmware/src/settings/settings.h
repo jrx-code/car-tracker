@@ -18,11 +18,19 @@ namespace settings {
 constexpr size_t kStrLen = 64;
 constexpr size_t kPassLen = 64;
 constexpr size_t kIdLen = 16;
+constexpr size_t kPlateLen = 16;  // longest Polish plate is 8 characters
+constexpr size_t kVinLen = 18;    // a VIN is exactly 17, plus the terminator
 
 struct Settings {
   // --- identity ---
   char vehicle_id[kIdLen];    // forms the MQTT topic, must match the HA entry
   char vehicle_name[kStrLen]; // shown in the portal only
+  // Registration and VIN are the two identifiers everything outside this
+  // project uses: insurance, the service book, the police. Keeping them on the
+  // device means the fleet page can label a car without a second registry to
+  // keep in sync, and a tracker found loose in a drawer says which car it is.
+  char plate[kPlateLen];
+  char vin[kVinLen];
   char hostname[kStrLen];     // mDNS and DHCP name
 
   // --- WiFi (garage, OTA, and the whole PoC) ---

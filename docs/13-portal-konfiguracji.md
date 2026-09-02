@@ -70,8 +70,20 @@ Rozdział odpowiedzialności jest celowy:
 | Ustawienie | Po co |
 |---|---|
 | `vehicle_id` | tworzy temat MQTT, musi się zgadzać z wpisem w HA i w hubie |
-| `vehicle_name` | opis pokazywany tylko w portalu |
+| `vehicle_name` | nazwa opisowa; idzie w `info`, więc widać ją też na stronie floty |
+| `plate` | numer rejestracyjny auta, w którym siedzi płytka; może być pusty |
+| `vin` | VIN tego auta; dokładnie 17 znaków albo pusty |
 | `hostname` | nazwa mDNS i DHCP |
+
+Rejestracja i VIN nie służą firmware'owi do niczego. Są tu, bo to jedyne
+identyfikatory, którymi posługuje się wszystko poza tym projektem, a trzymanie
+ich w urządzeniu znaczy jedno miejsce do zmiany zamiast osobnego rejestru
+w hubie. Płytka wyjęta z auta i tak wie, do którego auta należała.
+
+Firmware zamienia oba na wielkie litery i odrzuca VIN, który ma inną długość
+niż 17 znaków albo zawiera I, O lub Q (ISO 3779 wyklucza je, żeby nie myliły
+się z 1 i 0). Puste pole przy zapisie znaczy „nie zmieniaj" — tak samo jak
+przy każdym innym polu tekstowym w tym portalu.
 
 ### WiFi
 
