@@ -209,6 +209,51 @@ void scanPins() {
   pin_scan_running = false;
 }
 
+String loopback_result = "nie uruchomiony";
+
+// Loopback self test. Sends a pattern on the TX pin and looks for it on the RX
+// pin. With a jumper between GPIO26 and GPIO27 a pass proves the ESP32 side is
+// fine (UART, pins, wiring in software) and moves the fault to the module or
+// its power. Without the jumper it must fail, which is also worth knowing.
+void loopbackTest() {
+  Serial.println("\n=== UART loopback self test ===");
+  gpsSerial.setPins(PIN_GNSS_RX, PIN_GNSS_TX);
+  gpsSerial.updateBaudRate(9600);
+  pinMode(PIN_GNSS_RX, INPUT_PULLUP);
+  delay(50);
+  while (gpsSerial.available()) gpsSerial.read();
+
+  const char* pattern = "$GPTEST,0123456789,ABCDEFGHIJ*00\r\n";
+  gpsSerial.print(pattern);
+  gpsSerial.flush();
+
+  String got;
+  const uint32_t deadline = millis() + 700;
+  while (millis() < deadline) {
+    while (gpsSerial.available()) got += static_cast<char>(gpsSerial.read());
+    delay(1);
+  }
+
+  const bool ok = got.indexOf("0123456789") >= 0;
+  if (ok) {
+    loopback_result =
+        "PASS: to co wyslano na GPIO" + String(PIN_GNSS_TX) +
+        " wrocilo na GPIO" + String(PIN_GNSS_RX) +
+        ".\nUART i piny po stronie ESP32 sa sprawne, wiec problem jest w module "
+        "GPS albo w jego zasilaniu.\nOdebrano " + String(got.length()) + " B.";
+  } else if (got.length()) {
+    loopback_result = "CZESCIOWO: przyszlo " + String(got.length()) +
+                      " B, ale bez wzorca. Zla predkosc albo zaklocenia.\n" + got;
+  } else {
+    loopback_result =
+        "FAIL: nic nie wrocilo.\nJesli zworka miedzy GPIO" + String(PIN_GNSS_TX) +
+        " a GPIO" + String(PIN_GNSS_RX) +
+        " jest zalozona, to problem jest po stronie ESP32 (uszkodzony pin).\n"
+        "Bez zworki ten wynik jest oczekiwany.";
+  }
+  Serial.println(loopback_result);
+}
+
 String fixAgeText() {
   if (!gps.location.isValid()) return "brak";
   return String(gps.location.age() / 1000.0, 1) + " s temu";
@@ -288,8 +333,11 @@ void handleRoot() {
   html += scan_summary;
   html += F("</pre><h1>Skan pinow</h1><pre>");
   html += pin_scan_result;
+  html += F("</pre><h1>Test petli UART</h1><pre>");
+  html += loopback_result;
   html += F("</pre><p><a href='/rescan'>Powtorz skan predkosci</a> &middot; "
             "<a href='/scanpins'>Szukaj modulu na wszystkich pinach</a> &middot; "
+            "<a href='/loopback'>Test petli (zewrzyj GPIO26-GPIO27)</a> &middot; "
             "<a href='/json'>JSON</a></p></body></html>");
 
   server.send(200, "text/html; charset=utf-8", html);
@@ -371,6 +419,11 @@ void setup() {
   server.on("/", handleRoot);
   server.on("/json", handleJson);
   server.on("/rescan", handleRescan);
+  server.on("/loopback", []() {
+    server.sendHeader("Location", "/");
+    server.send(303);
+    loopbackTest();
+  });
   server.on("/scanpins", []() {
     server.sendHeader("Location", "/");
     server.send(303);
