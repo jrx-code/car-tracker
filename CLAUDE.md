@@ -9,6 +9,7 @@ raportujący do Home Assistant przez MQTT.
   protokół MQTT (05), CAN jako faza 2 (06), firmware (07), integracja HA (08),
   bezpieczeństwo (09), różnice między autami (10), plan wdrożenia (11)
 - `firmware/` — PlatformIO, ESP32, 5 środowisk (wifi_dev + 4 warianty modemu)
+- `firmware/probe/` — osobny mini projekt do bring-upu GPS (skan baud rate, diagnostyka NMEA)
 - `ha-integration/custom_components/car_tracker/` — integracja HA
 - `tools/sim_track.py` — symulator telemetrii, testy bez sprzętu
 
@@ -26,6 +27,12 @@ raportujący do Home Assistant przez MQTT.
 - Zmiana pakietu w `telemetry/packet.cpp` wymaga zmiany parsera w
   `ha-integration/.../coordinator.py`. Format jest w `docs/05`.
 - Nic nie jest wysyłane na magistralę CAN auta. Faza 2 jest pasywna, warunki w `docs/06`.
+- **Nie wołać `HardwareSerial::end()` żeby zmienić prędkość UART.** W Arduino core 3.3.9
+  `end()` odpina piny i usuwa sterownik; cykliczne begin/end na UART1 zalewa konsolę USB
+  powtarzającym się tekstem (1,8 MB w 20 s, zdiagnozowane 2026-09-02). Od zmiany prędkości
+  jest `updateBaudRate()`. Szczegóły w `docs/12-bring-up.md` punkt 12.4.
+- Bluetooth nie jest transportem: ESP-IDF nie ma PAN/BNEP, a ten core nie ma nawet
+  bibliotek BT. Uzasadnienie w `docs/12-bring-up.md` punkt 12.2, nie rozważać od nowa.
 
 ## Weryfikacja przed commitem
 
@@ -36,6 +43,7 @@ ruff check ha-integration/custom_components/car_tracker tools/
 
 ## Stan
 
-Faza PoC na posiadanym sprzęcie. Sprzęt LTE nie kupiony, nic nie zamontowane w aucie.
-Kolejny krok: uruchomić PoC wg `docs/00-poc.md`, równolegle kroki W1-W3
-z `docs/11-plan-wdrozenia.md` (pomiary na autach, bez montażu).
+Faza PoC na posiadanym sprzęcie. Płytka rozpoznana i opisana w `docs/12-bring-up.md`:
+ESP32-D0WD-V3, 4 MB flash, CP2102, `/dev/ttyUSB0`. Probe GPS wgrany i zweryfikowany
+bez modułu. Kolejny krok: podłączyć NEO-6M wg `docs/12-bring-up.md` punkt 12.5
+i zapisać pierwsze pomiary do `hardware/pomiary.md`.
