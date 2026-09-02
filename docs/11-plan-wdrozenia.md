@@ -50,7 +50,7 @@ odbiornik wielosystemowy, a nie sam modem.
 | Z5 | Dołożenie modemu i GNSS z load switchami, powtórzenie pomiaru |
 | Z6 | Test 72 h na zasilaczu laboratoryjnym z licznikiem amperogodzin |
 
-## Faza 3: montaż w ND1 (auto bez gwarancji, mniejsze ryzyko)
+## Faza 3: montaż w ND1 (auto starsze i tańsze, mniejsze ryzyko)
 
 | Krok | Co |
 |---|---|

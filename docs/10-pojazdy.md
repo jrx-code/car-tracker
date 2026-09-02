@@ -8,7 +8,7 @@ Firmware jest jeden (Z6). Różnice siedzą w konfiguracji NVS i w profilu w HA.
 |---|---|
 | Auto sezonowe, długie postoje | Profil oszczędny: `int_park` 3600 s, wcześniejsza hibernacja, priorytet dla ochrony akumulatora |
 | Akumulator po latach ma mniejszą pojemność użytkową | Progi napięciowe podniesione względem ND3: `v_hib` 12,0 V zamiast 11,9 V |
-| Brak gwarancji producenta | Faza 2 z odczytem CAN wchodzi najpierw tutaj, nie w ND3 |
+| Auto starsze i tańsze | Faza 2 z odczytem CAN wchodzi najpierw tutaj, nie w ND3 |
 | Starsza elektronika | `[DO ZMIERZENIA: czy pin 16 gaśnie po zaśnięciu auta]` |
 
 Główna wartość trackera w tym aucie to nie mapa, tylko **wykres napięcia akumulatora**
@@ -19,9 +19,22 @@ i alarm ruchu. Auto stojące zimą pod plandeką ma być widoczne w HA jako zdro
 | Cecha | Wpływ na projekt |
 |---|---|
 | Auto bieżące, codzienna jazda | Profil pełny: historia przejazdów, geofence, statystyki |
-| Auto na gwarancji | **Zero ingerencji w magistralę.** Faza 2 dopiero po ND1 i tylko w trybie pasywnego nasłuchu |
+| Auto nowe i wartościowsze | **Zero ingerencji w magistralę.** Faza 2 dopiero po ND1 i tylko w trybie pasywnego nasłuchu |
 | Nowsza elektronika i moduły z własnym zarządzaniem energią | Auto zasypia głębiej, więc nasz pobór jest bardziej widoczny w bilansie. Kryterium 2 mA z 1.7 dotyczy przede wszystkim tego auta |
 | Systemy wspomagania i większa liczba modułów | `[DO ZMIERZENIA: pobór spoczynkowy auta przed montażem trackera, żeby mieć punkt odniesienia]` |
+
+### Gwarancja: niesprawdzone
+
+Pierwsza wersja tego rozdziału podawała, że ND3 jest na gwarancji producenta,
+a ND1 nie. **Nikt tego nie sprawdził**, to była inferencja z roczników, i została
+stąd usunięta. `[DO USTALENIA: czy ND3 jest objęty gwarancją producenta, do kiedy,
+i czy warunki mówią cokolwiek o urządzeniach wpinanych w gniazdo OBD.]`
+
+Kolejność wdrożenia i tak się nie zmienia, bo nie opierała się na gwarancji:
+ND1 jest starszy, tańszy, stoi sezonowo i jego elektronika jest lepiej opisana
+przez społeczność. To wystarczy, żeby eksperymentować najpierw tam. Gdyby jednak
+gwarancja realnie obowiązywała, dochodzi drugi argument i wtedy trzeba go zapisać
+tutaj z konkretną datą końca, a nie z domysłu.
 
 ## 10.3 Konfiguracja per auto
 

@@ -81,7 +81,7 @@ Zasady, każda z konkretnego powodu:
   `[DO SPRAWDZENIA na stole: czy płytka wstaje z podłączonym transceiverem.]`
   Jeśli nie, przenieść TWAI TX na inny GPIO, bo TWAI daje się zmapować dowolnie.
 - **Izolacja ISO1050** jest opcją, nie wymogiem. Droższa, ale odcina nasze błędy od
-  magistrali auta. W ND3 na gwarancji warta rozważenia.
+  magistrali auta. W ND3, jako w aucie nowszym i droższym, warta rozważenia.
 
 ## 6.3 Co da się odczytać z ND1 2016
 
@@ -219,7 +219,9 @@ wolno, że w jednym przejeździe wygląda jak dowolny inny wolno pełzający lic
 - **Odpytywanie przy zgaszonym silniku.** Powód, dla którego to nie weszło do v1,
   nie zniknął. Cała sekcja 6.4 istnieje po to, żeby nie dało się tego zrobić przez
   przypadek.
-- **ND3 na gwarancji.** Fazę 2 wdrażamy najpierw w ND1, zgodnie z `10-pojazdy.md`.
+- **Kolejność aut.** Fazę 2 wdrażamy najpierw w ND1: starszy, tańszy, stoi
+  sezonowo i ma lepiej opisaną przez społeczność elektronikę. Status gwarancji
+  ND3 jest niesprawdzony i nie jest tu argumentem, patrz `10-pojazdy.md` 10.2.
 
 ## Źródła
 
