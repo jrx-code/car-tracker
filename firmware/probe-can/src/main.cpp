@@ -26,6 +26,10 @@
 //   transceiver R/RXD -> ESP32 GPIO18
 //   transceiver D/TXD -> ESP32 3V3, NOT to a GPIO. See below.
 //   transceiver RS    -> ESP32 GPIO32 if the board brings it out, else leave it
+//
+// On a Waveshare SN65HVD230 CAN Board the header is CAN_TX, GND, 3.3V, CAN_RX
+// and RS is not on it, so "D to VCC" is a jumper between two header pins and
+// GPIO32 stays unused. Its R2 (120 ohm) has to come off the board first.
 //   power             -> power bank on USB. NOT OBD pin 16.
 //
 // D IS TIED HIGH ON PURPOSE. On the SN65HVD230 the driver input is low for

@@ -151,19 +151,40 @@ Dokupka wyłącznie do rozdziału 06. Wchodzi dopiero po zamknięciu PoC i po
 | 14 | **SN65HVD230D** (SOIC-8, marking VP230) | 2 | transceiver na etap K2, tryb standby wyłącza nadajnik sprzętowo |
 | 15 | Przejściówka SOIC-8 na DIP albo gotowy moduł breakout | 4 | montaż na płytce stykowej na czas K1-K3 |
 
-Gotowy moduł (CJMCU-230, Waveshare SN65HVD230 CAN Board i ich klony sprzedawane
-pod różnymi markami) zdejmuje robotę z lutowaniem i do nasłuchu wystarcza.
-Dwie rzeczy do sprawdzenia po dostawie, bo z opisu oferty ich nie widać:
+Gotowy moduł zdejmuje robotę z lutowaniem i do nasłuchu wystarcza.
+**Waveshare SN65HVD230 CAN Board** jest zweryfikowany ze schematu producenta
+(`CAN_board.SchDoc`, 2011-09-05), więc poniżej nie ma domysłów:
 
-1. **Terminator 120 Ω.** Multimetr między CANH a CANL odłączonego modułu. Ma być
-   rozwarcie. Jeżeli jest około 120 Ω, wylutować rezystor albo rozewrzeć zwór.
-   To nie jest kosmetyka: równolegle do terminacji auta daje 60 Ω i psuje
-   komunikację w całym samochodzie.
-2. **Czy R_S jest wyprowadzony na goldpiny.** Zwykle nie, zwykle jest ustawiony
-   na płytce. Do nasłuchu nie przeszkadza, bo gwarancję daje pin D podciągnięty
-   do V_CC (patrz `06` punkt 6.2). Do wersji docelowej z trybem sleep R_S jest
-   potrzebny i wtedy trzeba go przylutować do nóżki układu albo wziąć sam układ
-   z pozycji 13 na przejściówce.
+| Element na płytce | Co z tego wynika |
+|---|---|
+| Goldpiny: cztery sygnały, `CAN_TX`, `GND`, `3.3V`, `CAN_RX` | wszystko, czego potrzeba do nasłuchu, jest na listwie |
+| **R_S przez R1 10 kΩ do masy, bez wyprowadzenia** | tryb slope control na stałe. Standby i sleep **niedostępne bez przeróbki** |
+| **R2 120 Ω między CANH a CANL, wlutowany, bez zwora** | **musi zostać wylutowany** przed podpięciem do auta |
+| Złącze CAN: dwa piny, CANL i CANH | do wtyku OBD wystarczy |
+
+Dwa wnioski praktyczne:
+
+1. **Rezystor R2 wychodzi.** Nie ma zwora, jest wlutowany na stałe. Równolegle do
+   terminacji auta daje 60 Ω i psuje komunikację w całym samochodzie, nie tylko
+   u nas. Po wylutowaniu multimetr między CANH a CANL ma pokazać rozwarcie.
+2. **R_S nie jest dostępny**, więc gwarancji „nadajnik wyłączony sprzętowo" nie
+   da się tu zrobić przez standby. Daje ją za to pin `CAN_TX` na listwie
+   zwarty do `3.3V` zamiast do GPIO: wejście nadajnika jest recesywne przy stanie
+   wysokim, więc stopień wyjściowy nie ma jak ściągnąć magistrali w dół (patrz
+   `06` punkt 6.2). Na tej płytce to jest zwykła zworka między dwoma sąsiednimi
+   sygnałami listwy.
+
+R1 10 kΩ ustawia slew rate około 15 V/µs. Przy 500 kb/s bit trwa 2 µs, więc to
+nie ogranicza. Odbiornik w trybie slope control pracuje normalnie.
+
+Do wersji docelowej z trybem sleep 40 nA ta płytka się nie nadaje bez przeróbki:
+trzeba albo przylutować się do nóżki 8 układu i usunąć R1, albo wziąć sam układ
+z pozycji 13 na przejściówce. Na etap K1-K3 to nie ma znaczenia.
+
+Waveshare ostrzega na swoim wiki, że w obiegu są kopie tej płytki. Klony
+(CJMCU-230 i to samo pod markami sprzedawców) mają zwykle ten sam układ
+połączeń, ale tego nie zweryfikowałem i przy nich obie kontrole powyżej trzeba
+zrobić multimetrem, a nie odczytać ze schematu.
 | 16 | Load switch P-MOSFET (jak poz. 6) | 1 | trzeci egzemplarz, na szynę transceivera |
 | 17 | Przewód OBD-II męski na luźne żyły, wszystkie 16 pinów | 1 | dostęp do 6/14 i 3/11 bez rozbierania wtyku z poz. 1 |
 
@@ -227,6 +248,8 @@ firmware. Brak zasilania nie zależy od niczego.
 - [Waveshare SIM7670G LTE Cat-1/GNSS HAT wiki](https://www.waveshare.com/wiki/SIM7670G_LTE_Cat-1/GNSS_HAT)
 - [SN65HVD230/231/232, karta katalogowa TI SLOS346O](https://www.ti.com/lit/ds/symlink/sn65hvd230.pdf)
 - [TJA1051, karta katalogowa NXP rev. 9](https://www.nxp.com/docs/en/data-sheet/TJA1051.pdf)
+- [Waveshare SN65HVD230 CAN Board, schemat](https://files.waveshare.com/upload/c/c5/SN65HVD230-CAN-Board-Schematic.pdf)
+- [Waveshare SN65HVD230 CAN Board, wiki](https://www.waveshare.com/wiki/SN65HVD230_CAN_Board)
 - [SIM7670G 4G LTE Cat 1 Module User Manual](https://manuals.plus/ae/1005006673400672)
 - [SIMCom: nowa generacja modułów LPWA SIM7070G/SIM7080G](https://www.simcom.com/news_view-38.html)
 - [Ineltek: SIM7070G/SIM7080G, różnice w obsłudze 2G/E-GPRS](https://www.ineltek.com/en/lpwa-new-product-simcom-launches-its-new-generation-lpwa-module-solution-sim7070g-sim7080g/)
