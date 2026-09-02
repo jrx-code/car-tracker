@@ -51,7 +51,7 @@ Bilans docelowy w stanie PARKED:
 | Przetwornica step-down w trybie pulse skip | około 140 µA | TPS54240 podaje 138 µA przy braku obciążenia w Eco-mode |
 | ESP32 w deep sleep z RTC i przerwaniem GPIO | 10-150 µA | zależnie od modułu |
 | Akcelerometr LIS3DH w trybie low power z detekcją ruchu | rząd 10 µA | to jest jego zastosowanie docelowe |
-| Dzielnik napięcia do pomiaru 12 V | poniżej 15 µA | rezystory rzędu setek kΩ, patrz 4.4 |
+| Dzielnik napięcia do pomiaru 12 V | 21 µA przy 14 V | 560 kΩ / 100 kΩ, patrz 4.4 |
 | Modem odcięty load switchem | około 0 | dlatego odcinamy, a nie usypiamy |
 | GNSS odcięty load switchem | około 0 | tak samo |
 | **Suma projektowa** | **poniżej 400 µA** | z zapasem mieści się w celu 2 mA z 1.7 |
@@ -91,12 +91,44 @@ Uzasadnienie elementów:
 
 ## 4.4 Pomiar napięcia akumulatora
 
-Dzielnik z pinu 16 na ADC ESP32, zaprojektowany tak, żeby sam nie był obciążeniem:
-rezystory rzędu 470 kΩ i 100 kΩ dają pobór poniżej 25 µA przy 14 V. Kondensator 100 nF
-równolegle do dolnego rezystora filtruje szpilki. ADC ESP32 jest nieliniowy, więc
-firmware używa kalibracji dwupunktowej zapisanej w NVS, a nie wzoru teoretycznego.
+Dzielnik z pinu 16 na ADC ESP32, zaprojektowany tak, żeby sam nie był obciążeniem.
+Kondensator 100 nF równolegle do dolnego rezystora filtruje szpilki. ADC ESP32 jest
+nieliniowy, więc firmware używa kalibracji dwupunktowej zapisanej w NVS, a nie wzoru
+teoretycznego. Procedura kalibracji jest w `docs/11-plan-wdrozenia.md`, krok W4.
 
-Procedura kalibracji jest w `docs/11-plan-wdrozenia.md`, krok W4.
+### Dobór rezystorów: 560 kΩ / 100 kΩ
+
+Pierwsza wersja tego punktu podawała 470 kΩ / 100 kΩ. **To jest za mało i psuje
+dokładnie ten zakres, na którym nam zależy.** ESP-IDF podaje dla tłumienia 11 dB
+zalecany zakres wejściowy 150-2450 mV, a powyżej niego charakterystyka spłaszcza
+się, bo ogranicza ją VDD_A, nie pełna skala przetwornika.
+
+Dzielnik 470/100 ma przekładnię 0,1754, więc:
+
+| Napięcie na pinie 16 | Na ADC przy 470/100 | Na ADC przy 560/100 |
+|---|---|---|
+| 11,5 V (bliskie hibernacji) | 2,018 V | 1,742 V |
+| 12,7 V (postój, akumulator zdrowy) | 2,228 V | 1,924 V |
+| 13,5 V (dolna granica pracy silnika) | 2,368 V | 2,045 V |
+| **14,8 V (górna granica pracy silnika)** | **2,596 V, poza zakresem** | 2,242 V |
+| 16,0 V | 2,807 V, poza zakresem | 2,424 V |
+
+Przy 470/100 cały przedział pracy silnika z 4.1, czyli 13,5-14,8 V, leży na
+granicy albo już poza zalecanym zakresem. To jest właśnie ten przedział, po
+którym rozpoznajemy jazdę progiem `v_drive_on` z 2.3, więc spłaszczenie
+charakterystyki uderza dokładnie w decyzję, do której ten pomiar służy.
+Kalibracja dwupunktowa tego nie ratuje, bo problem nie polega na przesunięciu
+prostej, tylko na tym, że powyżej 2,45 V nie ma już prostej.
+
+560 kΩ / 100 kΩ mieści cały zakres 11-16 V wewnątrz 150-2450 mV, a przy okazji
+pobiera mniej: 21 µA przy 14 V zamiast 25 µA.
+
+Czego to nadal nie mierzy: skoków powyżej 16 V. Dzielnik wtedy saturuje i pokaże
+sufit. To jest zamierzone, bo od load dumpu jest TVS z 4.3, a nie przetwornik.
+Firmware ma traktować odczyt przy suficie jako brak pomiaru, nie jako 16 V.
+
+`[DO ZMIERZENIA W2: rzeczywisty profil napięcia w ND1. Jeżeli alternator ND
+wyjdzie poza 16 V, dolny rezystor trzeba jeszcze zmniejszyć.]`
 
 ## 4.5 Ochrona akumulatora (odcięcie podnapięciowe)
 
@@ -129,6 +161,7 @@ od skokowego poboru.
 
 ## Źródła
 
+- [ESP-IDF: zakresy wejściowe ADC dla poszczególnych tłumień](https://docs.espressif.com/projects/esp-idf/en/v4.4/esp32/api-reference/peripherals/adc.html)
 - [TPS54240 42-V 2,5-A step-down regulator, TI](https://www.ti.com/product/TPS54240)
 - [TPS54240 datasheet (Eco-mode, 138 µA)](https://www.ti.com/lit/ds/symlink/tps54240.pdf)
 - [TPS54240-Q1, wersja motoryzacyjna AEC-Q100](https://www.ti.com/product/TPS54240-Q1)

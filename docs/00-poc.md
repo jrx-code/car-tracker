@@ -106,3 +106,53 @@ Dopiero wtedy ma sens decyzja zakupowa z docs/03 i wydawanie pieniędzy na modem
 Jeżeli PoC pokaże, że NEO-6M gubi fix w mieście, decyzja zakupowa zmienia się
 z jednej pozycji (modem) na dwie (modem plus odbiornik wielosystemowy),
 i lepiej wiedzieć to przed zamówieniem, a nie po.
+
+## 0.7 Gniazdo OBD w PoC: mierzymy, nie zasilamy
+
+Żadne z czterech kryteriów z 0.6 nie potrzebuje gniazda OBD. Potrzebują go
+za to kroki W2, W3 i W4 z `11-plan-wdrozenia.md`, a bez nich nie ruszamy dalej,
+bo W3 potrafi wywrócić całą koncepcję stanu PARKED. Dlatego w PoC gniazdo OBD
+wchodzi w jednej roli: **jako mierzony obiekt**. Zasilanie nadal idzie
+z powerbanku i to nie jest ostrożnościowy rytuał, tylko warunek pomiaru:
+gdyby tracker wisiał na pinie 16, to w chwili, gdy pin 16 zgaśnie, zgasłby
+razem z nim i nie zaraportowałby tego, po co go tam włożyliśmy.
+
+### Co się podłącza
+
+Dwa przewody z gniazda, dzielnik, jeden pin ADC. Nic więcej.
+
+```
+pin 16 (+12 V staly) ---[560k]---+--- GPIO34 (PIN_VBAT_ADC)
+                                 |
+                              [100k]   [100 nF]
+                                 |        |
+pin 4 (masa nadwozia) -----------+--------+--- GND ESP32
+```
+
+- **Masa ESP32 idzie na pin 4 gniazda.** Powerbank pływa, więc dopięcie jego
+  masy do masy auta jest bezpieczne i konieczne: bez wspólnej masy dzielnik
+  mierzy nic.
+- **Nie ma tu żadnego poboru z auta.** Przy 14 V dzielnik ciągnie 21 µA, czyli
+  tysiąc razy mniej niż zdrowy pobór spoczynkowy samochodu.
+- **560k w szeregu jest zabezpieczeniem samo w sobie.** Nawet skok do 40 V daje
+  do struktury ESD w ESP32 (40 - 3,3) / 560k, czyli 65 µA. Dioda ograniczająca
+  do 3V3 jest opcją, nie wymogiem.
+
+### Jedno realne niebezpieczeństwo
+
+Pin 16 to nieprzerwane plus z akumulatora. **Zsunięcie się sondy z pinu 16 na
+pin 4 albo na obudowę gniazda to zwarcie akumulatora przez cienki przewód.**
+Stąd wtyk OBD-II męski na luźne żyły (pozycja 17 z `03` punkt 3.8) zamiast
+wtykania gołych drutów w gniazdo. To jedyna rzecz, którą trzeba kupić, żeby
+domknąć PoC, i tak czy inaczej jest potrzebna w fazie 2.
+
+Do tego dwa rezystory i kondensator. Jeżeli 560k nie ma w szufladzie, dwa 1M
+równolegle dają 500k i to też mieści się w zakresie, tylko trzeba wpisać
+faktyczną wartość do kalibracji z W4.
+
+### Czego to nie zmienia
+
+Zasada z 0.4 zostaje w mocy: **z gniazda OBD nic nie zasilamy, dopóki nie ma
+zmierzonego poboru w deep sleep i działającego odcięcia podnapięciowego.**
+Dopięcie dzielnika nie jest wyjątkiem od tej zasady, bo dzielnik nie pobiera
+prądu w sensie, o który w niej chodzi. Wpięcie zasilania to nadal faza 3.

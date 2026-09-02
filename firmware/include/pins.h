@@ -37,7 +37,7 @@
 #define PIN_GNSS_RX 26  // ESP32 RX <- NEO-6M TX
 #define PIN_GNSS_EN 33  // load switch: cuts the 3.3 V GNSS rail
 
-#define PIN_VBAT_ADC 34  // divider 470k/100k from OBD pin 16, see docs/04 section 4.4
+#define PIN_VBAT_ADC 34  // divider 560k/100k from OBD pin 16, see docs/04 section 4.4
 #define PIN_ACC_SDA 21
 #define PIN_ACC_SCL 22
 #define PIN_ACC_INT 35  // RTC-capable GPIO, required for ext0 deep sleep wake

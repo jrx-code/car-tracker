@@ -14,10 +14,14 @@ Preferences prefs;
 bool modem_on = false;
 bool gnss_on = false;
 
-// Calibration: vbat = raw * gain + offset. Defaults assume a 470k/100k divider
+// Calibration: vbat = raw * gain + offset. Defaults assume a 560k/100k divider
 // and the nominal ADC scale; they are only a starting point and are expected to
 // be replaced by setCalibration() during step W4 of docs/11-plan-wdrozenia.md.
-float cal_gain = (3.3f / 4095.0f) * ((470.0f + 100.0f) / 100.0f);
+//
+// 560k and not 470k: at 11 dB the ESP32 ADC is only specified up to 2450 mV, and
+// 470k/100k puts the whole engine-running band above that, which is exactly the
+// band the drive threshold reads. See docs/04 section 4.4.
+float cal_gain = (3.3f / 4095.0f) * ((560.0f + 100.0f) / 100.0f);
 float cal_offset = 0.0f;
 
 constexpr int kAdcSamples = 32;
