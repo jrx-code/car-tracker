@@ -1,6 +1,17 @@
-# 10. Dwa auta, dwie konfiguracje
+# 10. Auta i konfiguracje per pojazd
 
 Firmware jest jeden (Z6). Różnice siedzą w konfiguracji NVS i w profilu w HA.
+
+**Od 2026-09-02 planowane są trzy auta**, nie dwa: kupione trzy sztuki
+LilyGO T-A7670E R2 with GPS. Trzeci pojazd nie jest jeszcze opisany, bo nie
+zapadła decyzja, które to auto. `[DO USTALENIA: marka, rocznik, identyfikator
+pojazdu, czy sezonowe czy codzienne.]`
+
+Nic w kodzie nie zakłada dwóch. Sprawdzone: `vehicle_id`, użytkownik i hasło
+MQTT są ustawieniami NVS edytowanymi w portalu (`13`), a nie `#define`;
+agregator ogłasza w discovery każdy pojazd, o którym się dowie, bez listy
+w konfiguracji. Dwójka siedzi wyłącznie w tekście tego rozdziału i w liczbie
+kont na brokerze.
 
 ## 10.1 ND1 2016
 
@@ -48,9 +59,28 @@ Wartości poza domyślnymi, wysyłane retained na `cartracker/<id>/cfg`:
 | `int_alarm` | 15 | 15 | alarm ruchu jednakowo pilny w obu |
 | `gnss_src` | `auto` | `auto` | porównanie NEO-6M i GNSS modemu w obu autach |
 
-## 10.4 Czego nie zakładamy
+## 10.4 Dołożenie kolejnego pojazdu
 
-Nie zakładamy, że oba auta mają identyczne gniazdo OBD, identyczne zachowanie pinu 16
+Lista jest tu, bo dotąd ta wiedza była rozsypana po pięciu rozdziałach.
+
+| Krok | Gdzie | Uwaga |
+|---|---|---|
+| 1. Nadać `vehicle_id` | portal urządzenia, sekcja Pojazd (`13`) | tworzy temat MQTT, litery, cyfry, `-` i `_` |
+| 2. Wpisać rejestrację i VIN | tam samo | idą w `info`, podpisują auto na stronie floty i w HA |
+| 3. Założyć konto MQTT `cartracker-<id>` | EMQX | jedno konto na pojazd, patrz `09` punkt 9.2. Hasło do menedzer hasel |
+| 4. Wpisać konto w portalu | sekcja MQTT | nie w `config.h`, to są ustawienia fabryczne |
+| 5. Profil konfiguracji | retained `cfg`, tabela 10.3 | interwały i progi napięcia zależą od tego, czy auto jest sezonowe |
+| 6. Pomiary W1-W3 na tym aucie | `11` faza 1 | osobno dla każdego auta, patrz 10.5 |
+| 7. Wpis `places` w HA | `08` punkt 8.1 | adres zamiast współrzędnych |
+
+Kroki, których **nie ma** na tej liście, bo dzieją się same: encje w HA (hub
+ogłasza nowy pojazd, gdy tylko przyjdzie od niego `info` albo `tel`), wiersz na
+stronie floty, baza w agregatorze.
+
+## 10.5 Czego nie zakładamy
+
+Nie zakładamy, że auta mają identyczne gniazdo OBD, identyczne zachowanie pinu 16
 ani identyczny profil napięcia z alternatora. Każdy z tych punktów jest w planie wdrożenia
-(rozdział 11) jako osobny pomiar, wykonywany na obu autach niezależnie. Rocznik 2016
-i rocznik 2025 to dziewięć lat różnicy w elektronice, mimo tej samej nazwy generacji.
+(rozdział 11) jako osobny pomiar, wykonywany na każdym aucie niezależnie. Rocznik 2016
+i rocznik 2025 to dziewięć lat różnicy w elektronice, mimo tej samej nazwy generacji,
+a trzeci pojazd może nie być nawet Mazdą.

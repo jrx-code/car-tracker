@@ -215,6 +215,10 @@ Lista wariantów zaciągnięta ze sklepu LilyGO:
 **Sklep: [OpenELAB](https://openelab.io/products/lilygo-t-a7670e-r2-wireless-module),
 wersja „with GPS", 44,95 € plus 7,95 € wysyłki, czyli 52,90 € pod drzwi.**
 
+**Zamówione 2026-09-02: 3 sztuki**, bo docelowo trzy auta (`10` punkt 10.1).
+Przy trzech sztukach zamówienie przekracza 100 €, więc wysyłka jest gratis.
+Pozycje 1-12 z BOM w 3.7 są „na 1 auto" i też idą razy trzy.
+
 Uzasadnienie jest logistyczne, nie techniczne, bo płytka jest ta sama:
 
 - Magazyn w Monachium albo w Shenzhen, ale **dla krajów UE OpenELAB pokrywa cło
