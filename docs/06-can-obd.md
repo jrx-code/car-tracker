@@ -78,6 +78,7 @@ pin 14 (CAN L) --+
                  |
           [SN65HVD231, na K2 SN65HVD230]  <-- Vcc 3,3 V przez load switch (PIN_CAN_EN)
                  |                            R_S sterowany z GPIO
+                 |                            pin D na etapie nasłuchu do Vcc
                  |
           TWAI ESP32: PIN_CAN_TX 5, PIN_CAN_RX 18
 ```
@@ -107,9 +108,19 @@ Zasady, każda z konkretnego powodu:
   40 nA; SN65HVD230 na czas K2, bo jego standby wyłącza nadajnik sprzętowo,
   niezależnie od firmware. TJA1051 odpada, bo chce 4,5-5,5 V, a jego silent to
   około 1 mA, czyli dwa i pół raza cały nasz budżet na stan PARKED.
-- **Pin R_S wyprowadzony na GPIO**, nie zwarty na stałe. Na etapie K2 chcemy go
-  trzymać przy V_CC (standby), a w wersji docelowej przełączać między sleep
-  a pracą. Zwarcie do masy na stałe odbiera nam obie te możliwości.
+- **Pin R_S wyprowadzony na GPIO**, nie zwarty na stałe. W wersji docelowej
+  przełączamy nim między sleep a pracą. Zwarcie do masy na stałe odbiera nam tę
+  możliwość. Uwaga praktyczna: tanie moduły breakout często nie wyprowadzają R_S
+  na goldpiny, tylko ustawiają go na płytce. Do nasłuchu to nie przeszkadza,
+  patrz punkt niżej.
+- **Na czas nasłuchu pin D transceivera idzie do V_CC, a nie do GPIO.**
+  W SN65HVD230 wejście nadajnika jest dominujące przy stanie niskim i recesywne
+  przy wysokim, więc D trzymane na V_CC znaczy, że stopień wyjściowy **fizycznie
+  nie jest w stanie ściągnąć magistrali w dół**, niezależnie od kontrolera,
+  firmware i przypadkowego resetu. TWAI i tak siedzi w listen only i tak samo
+  nigdy nie wystawia TX, więc to jest druga niezależna gwarancja, a nie zamiennik
+  pierwszej. Przy okazji znika zależność od tego, czy moduł wyprowadza R_S.
+  Kontroler TWAI wymaga podania pinu TX, więc dostaje pin, na którym nic nie ma.
 - **Izolacja ISO1050** jest opcją, nie wymogiem. Droższa, wymaga zasilania po
   drugiej stronie bariery i dokłada własny pobór. W ND1 nieuzasadniona.
 

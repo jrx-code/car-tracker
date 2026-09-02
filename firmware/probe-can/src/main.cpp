@@ -18,19 +18,30 @@
 // wrong bit rate produces receive errors here and silence on the car's bus.
 // That is what makes the bit rate scan safe to run on somebody else's vehicle.
 //
-// Wiring (matches firmware/include/pins.h):
+// Wiring:
 //   transceiver CANH  -> OBD pin 6      [TO CONFIRM, docs/06 section 6.2]
 //   transceiver CANL  -> OBD pin 14     [TO CONFIRM]
 //   transceiver GND   -> OBD pin 4 and ESP32 GND
 //   transceiver VCC   -> ESP32 3V3      (SN65HVD230/231 are 3.3 V parts)
-//   transceiver RS    -> ESP32 GPIO32   (high = low power, low = normal)
-//   transceiver D/TXD -> ESP32 GPIO5
 //   transceiver R/RXD -> ESP32 GPIO18
+//   transceiver D/TXD -> ESP32 3V3, NOT to a GPIO. See below.
+//   transceiver RS    -> ESP32 GPIO32 if the board brings it out, else leave it
 //   power             -> power bank on USB. NOT OBD pin 16.
+//
+// D IS TIED HIGH ON PURPOSE. On the SN65HVD230 the driver input is low for
+// dominant and high for recessive, so a D held at VCC means the output stage
+// physically cannot pull the bus down, whatever the controller, the firmware or
+// a stray reset does. TWAI is still installed in listen-only and still never
+// asserts TX, so this is the second of two independent guarantees rather than a
+// replacement for the first. It also removes any dependence on the RS pin,
+// which cheap breakout boards often do not bring out to the header.
+//
+// TWAI insists on being given a TX pin, so it gets one that goes nowhere.
 //
 // The 120 ohm terminator on a breakout board must be removed first: the car's
 // bus is already terminated at both ends and a third resistor drops the line
-// impedance to 60 ohms.
+// impedance to 60 ohms. Measure between CANH and CANL on the unplugged module:
+// open circuit is what you want, 120 ohms means find the resistor or the jumper.
 #include <Arduino.h>
 #include <ArduinoOTA.h>
 #include <driver/twai.h>
@@ -40,9 +51,11 @@
 
 #include "secrets.h"
 
-constexpr gpio_num_t PIN_CAN_TX = GPIO_NUM_5;
+// Deliberately not wired to the transceiver: the driver input is held at VCC in
+// hardware. TWAI requires a TX pin, so it drives a pin with nothing on it.
+constexpr gpio_num_t PIN_CAN_TX = GPIO_NUM_19;
 constexpr gpio_num_t PIN_CAN_RX = GPIO_NUM_18;
-constexpr int PIN_CAN_RS = 32;  // transceiver mode select, LOW = normal
+constexpr int PIN_CAN_RS = 32;  // only if the board brings RS out; LOW = normal
 constexpr int PIN_LED = 2;
 constexpr const char* MDNS_NAME = "can-probe";
 
@@ -414,9 +427,9 @@ void setup() {
   boot_ms = millis();
 
   pinMode(PIN_LED, OUTPUT);
-  // RS low = normal mode on SN65HVD230/231. Driven from a GPIO rather than
-  // strapped so the same board can be put into standby (230) or sleep (231)
-  // without a soldering iron. See docs/06 section 6.2.
+  // RS low = normal mode on SN65HVD230/231, which is what we want for sniffing:
+  // the receiver has to stay awake. Harmless if the breakout does not bring RS
+  // out, in which case the board has already fixed it on the PCB.
   pinMode(PIN_CAN_RS, OUTPUT);
   digitalWrite(PIN_CAN_RS, LOW);
 

@@ -150,6 +150,20 @@ Dokupka wyłącznie do rozdziału 06. Wchodzi dopiero po zamknięciu PoC i po
 | 13 | **SN65HVD231D** (SOIC-8, marking VP231) | 2 | transceiver docelowy, tryb sleep 40 nA |
 | 14 | **SN65HVD230D** (SOIC-8, marking VP230) | 2 | transceiver na etap K2, tryb standby wyłącza nadajnik sprzętowo |
 | 15 | Przejściówka SOIC-8 na DIP albo gotowy moduł breakout | 4 | montaż na płytce stykowej na czas K1-K3 |
+
+Gotowy moduł (CJMCU-230, Waveshare SN65HVD230 CAN Board i ich klony sprzedawane
+pod różnymi markami) zdejmuje robotę z lutowaniem i do nasłuchu wystarcza.
+Dwie rzeczy do sprawdzenia po dostawie, bo z opisu oferty ich nie widać:
+
+1. **Terminator 120 Ω.** Multimetr między CANH a CANL odłączonego modułu. Ma być
+   rozwarcie. Jeżeli jest około 120 Ω, wylutować rezystor albo rozewrzeć zwór.
+   To nie jest kosmetyka: równolegle do terminacji auta daje 60 Ω i psuje
+   komunikację w całym samochodzie.
+2. **Czy R_S jest wyprowadzony na goldpiny.** Zwykle nie, zwykle jest ustawiony
+   na płytce. Do nasłuchu nie przeszkadza, bo gwarancję daje pin D podciągnięty
+   do V_CC (patrz `06` punkt 6.2). Do wersji docelowej z trybem sleep R_S jest
+   potrzebny i wtedy trzeba go przylutować do nóżki układu albo wziąć sam układ
+   z pozycji 13 na przejściówce.
 | 16 | Load switch P-MOSFET (jak poz. 6) | 1 | trzeci egzemplarz, na szynę transceivera |
 | 17 | Przewód OBD-II męski na luźne żyły, wszystkie 16 pinów | 1 | dostęp do 6/14 i 3/11 bez rozbierania wtyku z poz. 1 |
 
