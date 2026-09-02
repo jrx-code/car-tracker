@@ -1,0 +1,98 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Car Tracker",
+        "description": "Dodaj jeden pojazd. Identyfikator musi być taki sam jak ustawiony w urządzeniu (NVS), bo z niego powstaje temat MQTT.",
+        "data": {
+          "vehicle_id": "Identyfikator pojazdu (np. nd1)",
+          "name": "Nazwa wyświetlana",
+          "topic_prefix": "Prefiks tematów MQTT"
+        }
+      }
+    },
+    "error": {
+      "mqtt_unavailable": "Integracja MQTT jest niedostępna."
+    },
+    "abort": {
+      "already_configured": "Ten pojazd jest już skonfigurowany."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Ustawienia trackera",
+        "description": "Wysyłane do urządzenia jako retained cfg. Progi napięcia ustaw na podstawie pomiarów wykonanych na tym aucie.",
+        "data": {
+          "int_drive": "Interwał pozycji w jeździe (s)",
+          "int_park": "Interwał telemetrii na postoju (s)",
+          "int_alarm": "Interwał przy alarmie ruchu (s)",
+          "v_drive_on": "Silnik pracuje powyżej (V)",
+          "v_drive_off": "Silnik stoi poniżej (V)",
+          "v_warn": "Ostrzeżenie o akumulatorze (V)",
+          "v_hib": "Hibernacja poniżej (V)",
+          "v_wake": "Wyjście z hibernacji powyżej (V)",
+          "crs_delta": "Dodatkowa pozycja przy zmianie kursu (stopnie)",
+          "hdop_max": "Najgorszy akceptowany HDOP",
+          "motion_sens": "Czułość na ruch (1-5)",
+          "gnss_src": "Źródło GNSS"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "voltage": { "name": "Napięcie akumulatora" },
+      "speed": { "name": "Prędkość" },
+      "satellites": { "name": "Satelity" },
+      "rssi": { "name": "Siła sygnału" },
+      "network": { "name": "Sieć" },
+      "mode": {
+        "name": "Tryb",
+        "state": {
+          "parked": "Postój",
+          "driving": "Jazda",
+          "moved": "Ruch na postoju",
+          "hibernate": "Hibernacja"
+        }
+      },
+      "queued": { "name": "Punkty w kolejce" },
+      "uptime": { "name": "Czas pracy" },
+      "trip_distance": { "name": "Dystans bieżącego przejazdu" },
+      "last_trip_distance": { "name": "Dystans ostatniego przejazdu" },
+      "last_trip_duration": { "name": "Czas ostatniego przejazdu" },
+      "last_trip_max_speed": { "name": "Prędkość maksymalna ostatniego przejazdu" }
+    },
+    "binary_sensor": {
+      "driving": { "name": "Jazda" },
+      "motion_alarm": { "name": "Alarm ruchu" },
+      "battery_low": { "name": "Niskie napięcie" },
+      "hibernate": { "name": "Hibernacja" },
+      "roaming": { "name": "Roaming" }
+    }
+  },
+  "services": {
+    "locate": {
+      "name": "Zlokalizuj",
+      "description": "Wybudza GNSS i modem, wysyła jedną pozycję niezależnie od trybu.",
+      "fields": {
+        "entry_id": { "name": "Wpis konfiguracji", "description": "Który pojazd." }
+      }
+    },
+    "ping": {
+      "name": "Ping",
+      "description": "Sprawdzenie czasu obiegu do urządzenia.",
+      "fields": {
+        "entry_id": { "name": "Wpis konfiguracji", "description": "Który pojazd." }
+      }
+    },
+    "set_config": {
+      "name": "Ustaw konfigurację",
+      "description": "Publikuje retained cfg do urządzenia.",
+      "fields": {
+        "entry_id": { "name": "Wpis konfiguracji", "description": "Który pojazd." },
+        "config": { "name": "Konfiguracja", "description": "Klucze z docs/05 punkt 5.6." }
+      }
+    }
+  }
+}

@@ -1,0 +1,128 @@
+# 08. Integracja Home Assistant
+
+Katalog `ha-integration/custom_components/car_tracker`. Docelowo HA 2026.8.3
+(wersja sprawdzona na prodzie), integracja typu `local_push`, zależna od `mqtt`.
+
+## 8.1 Instalacja
+
+```bash
+scp -r ha-integration/custom_components/car_tracker hassio:/config/custom_components/
+# restart HA, potem Ustawienia -> Urządzenia i usługi -> Dodaj integrację -> Car Tracker
+```
+
+Zapis do `/config` przez SMB, jeśli scp odmawia. Restart prod HA tylko po
+uzgodnieniu, nigdy w środku dnia bez zapowiedzi.
+
+Konfiguracja: `vehicle_id` (musi być identyczny jak w NVS urządzenia, bo z niego
+powstaje temat MQTT), nazwa wyświetlana i prefiks tematów. Jeden wpis na auto.
+
+## 8.2 Encje
+
+Jedno urządzenie na pojazd, encje z `has_entity_name`.
+
+| Encja | Typ | Uwagi |
+|---|---|---|
+| `device_tracker.<auto>` | GPS | pozycja, dokładność wyliczana z HDOP |
+| Napięcie akumulatora | sensor, V | to jest najważniejsza encja dla ND1 |
+| Prędkość | sensor, km/h | z GNSS, nie z auta |
+| Satelity, HDOP, siła sygnału, sieć | sensor, diagnostyka | |
+| Punkty w kolejce | sensor, diagnostyka | rośnie, gdy łącze siada. Pierwszy sygnał ostrzegawczy |
+| Tryb | sensor enum | postój, jazda, ruch na postoju, hibernacja |
+| Dystans bieżącego przejazdu | sensor, km | liczony w HA z pozycji |
+| Ostatni przejazd: dystans, czas, prędkość maks. | sensor | zostaje po zakończeniu jazdy |
+| Jazda | binary_sensor moving | |
+| Alarm ruchu | binary_sensor problem | decyzja urządzenia, nie HA |
+| Niskie napięcie | binary_sensor battery | próg 12,2 V |
+| Hibernacja, roaming | binary_sensor, diagnostyka | |
+
+## 8.3 Dlaczego to jest integracja, a nie MQTT discovery
+
+Discovery dałoby encje bez pisania kodu, ale nie dałoby czterech rzeczy, które
+w tym projekcie są istotne:
+
+1. **Deduplikacja po `seq`.** Dosyłka zaległości z definicji generuje duplikaty
+   (rekord znika z kolejki dopiero po PUBACK). Discovery nie ma gdzie tego liczyć.
+2. **Filtr niemożliwych skoków.** Pozycja, która wymagałaby prędkości ponad
+   300 km/h, jest odrzucana jako błąd GNSS zamiast lądować na mapie.
+3. **Przejazdy.** Dystans i statystyki liczone z pozycji, żeby firmware został
+   głupi i stabilny (docs/02 punkt 2.8).
+4. **Konfiguracja urządzenia z UI.** Opcje integracji publikują retained `cfg`,
+   więc progi napięcia poprawia się w HA po pomiarach na aucie, bez kabla.
+
+## 8.4 Odporność na złe dane
+
+Wszystko, co przychodzi z MQTT, jest traktowane jak dane, nie jak prawda:
+
+- Payload nie będący JSON-em albo nie będący obiektem: log i porzucenie.
+- Brak `lat` albo `lon`: porzucenie, bez wyjątku w logu HA.
+- `hdop` gorszy niż 5,0: porzucenie. Firmware też filtruje, ale filtr po stronie
+  odbiorczej przeżyje stare firmware w polu.
+- Punkt z kolejki starszy niż to, co już pokazujemy, liczy się do statystyk
+  przejazdu, ale nie cofa trackera na mapie.
+- Zbiór widzianych `seq` jest przycinany do 2500 pozycji, żeby nie rósł w nieskończoność.
+
+## 8.5 Usługi
+
+| Usługa | Działanie |
+|---|---|
+| `car_tracker.locate` | wybudza GNSS i modem, wymusza jedną pozycję |
+| `car_tracker.ping` | sprawdzenie czasu obiegu |
+| `car_tracker.set_config` | publikuje retained `cfg` (klucze z docs/05 punkt 5.6) |
+
+Komendy nigdy nie są retained. Retained `reboot` odtwarzałby się przy każdym
+połączeniu i dałby pętlę restartów.
+
+## 8.6 Zdarzenia
+
+Każde `evt` z urządzenia trafia na szynę HA jako `car_tracker_event`
+z polem `vehicle_id`. Do automatyzacji:
+
+```yaml
+automation:
+  - alias: "Alarm: ruch auta na postoju"
+    trigger:
+      - trigger: event
+        event_type: car_tracker_event
+        event_data:
+          event: motion_alarm
+    action:
+      - action: notify.whatsapp_api_notifier
+        data:
+          message: >-
+            Ruch auta {{ trigger.event.data.vehicle_id }} bez zapłonu:
+            https://maps.google.com/?q={{ trigger.event.data.lat }},{{ trigger.event.data.lon }}
+
+  - alias: "ND1: akumulator siada"
+    trigger:
+      - trigger: numeric_state
+        entity_id: sensor.nd1_napiecie_akumulatora
+        below: 12.2
+        for: "01:00:00"
+    action:
+      - action: notify.whatsapp_api_notifier
+        data:
+          message: "ND1: napięcie {{ states('sensor.nd1_napiecie_akumulatora') }} V, czas na prostownik."
+```
+
+Nazwy encji do sprawdzenia po instalacji, nie zakładać ich z góry.
+
+## 8.7 Historia i retencja
+
+Surowe pozycje w recorderze i w InfluxDB mają krótszą retencję niż reszta domu
+(propozycja 180 dni), zagregowane przejazdy zostają. Uzasadnienie w docs/09
+punkt 9.4: ślad surowy odtwarza codzienne trasy z dokładnością do minuty,
+a agregat daje tę samą wartość użytkową przy mniejszej wrażliwości.
+
+## 8.8 Testowanie bez sprzętu
+
+```bash
+export MQTT_PASS=$(bw get password "car-tracker MQTT (nd1)")
+tools/sim_track.py --vehicle nd1 --trip --fast          # przejazd
+tools/sim_track.py --vehicle nd1 --park --fast          # postój, napięcie spada
+tools/sim_track.py --vehicle nd1 --alarm --fast         # ruch bez zapłonu
+tools/sim_track.py --vehicle nd1 --backlog 120 --duplicate  # zaległości i duplikaty
+```
+
+Wariant `--backlog --duplicate` wysyła tę samą paczkę dwa razy. Jeżeli w HA
+pojawią się podwójne punkty, deduplikacja po `seq` nie działa i to jest błąd
+do naprawienia przed montażem w aucie, a nie po.

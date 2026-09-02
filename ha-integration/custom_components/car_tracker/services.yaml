@@ -1,0 +1,28 @@
+locate:
+  fields:
+    entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: car_tracker
+
+ping:
+  fields:
+    entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: car_tracker
+
+set_config:
+  fields:
+    entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: car_tracker
+    config:
+      required: true
+      example: '{"int_drive": 20, "v_hib": 12.0}'
+      selector:
+        object:

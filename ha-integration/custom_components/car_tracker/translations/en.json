@@ -1,0 +1,98 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Car Tracker",
+        "description": "Add one vehicle. The vehicle id must match the id set on the device (NVS), because it forms the MQTT topic.",
+        "data": {
+          "vehicle_id": "Vehicle id (e.g. nd1)",
+          "name": "Display name",
+          "topic_prefix": "MQTT topic prefix"
+        }
+      }
+    },
+    "error": {
+      "mqtt_unavailable": "The MQTT integration is not available."
+    },
+    "abort": {
+      "already_configured": "This vehicle is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Tracker settings",
+        "description": "Published to the device as a retained cfg message. Voltage thresholds should be set from the measurements taken on this car.",
+        "data": {
+          "int_drive": "Position interval while driving (s)",
+          "int_park": "Telemetry interval while parked (s)",
+          "int_alarm": "Interval during a motion alarm (s)",
+          "v_drive_on": "Engine running above (V)",
+          "v_drive_off": "Engine stopped below (V)",
+          "v_warn": "Low battery warning (V)",
+          "v_hib": "Hibernate below (V)",
+          "v_wake": "Wake from hibernation above (V)",
+          "crs_delta": "Extra position on course change (deg)",
+          "hdop_max": "Worst accepted HDOP",
+          "motion_sens": "Motion sensitivity (1-5)",
+          "gnss_src": "GNSS source"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "voltage": { "name": "Battery voltage" },
+      "speed": { "name": "Speed" },
+      "satellites": { "name": "Satellites" },
+      "rssi": { "name": "Signal strength" },
+      "network": { "name": "Network" },
+      "mode": {
+        "name": "Mode",
+        "state": {
+          "parked": "Parked",
+          "driving": "Driving",
+          "moved": "Moved while parked",
+          "hibernate": "Hibernating"
+        }
+      },
+      "queued": { "name": "Queued points" },
+      "uptime": { "name": "Uptime" },
+      "trip_distance": { "name": "Current trip distance" },
+      "last_trip_distance": { "name": "Last trip distance" },
+      "last_trip_duration": { "name": "Last trip duration" },
+      "last_trip_max_speed": { "name": "Last trip max speed" }
+    },
+    "binary_sensor": {
+      "driving": { "name": "Driving" },
+      "motion_alarm": { "name": "Motion alarm" },
+      "battery_low": { "name": "Battery low" },
+      "hibernate": { "name": "Hibernating" },
+      "roaming": { "name": "Roaming" }
+    }
+  },
+  "services": {
+    "locate": {
+      "name": "Locate",
+      "description": "Wakes GNSS and the modem and sends one position, regardless of the current mode.",
+      "fields": {
+        "entry_id": { "name": "Config entry", "description": "Which vehicle." }
+      }
+    },
+    "ping": {
+      "name": "Ping",
+      "description": "Round trip check to the device.",
+      "fields": {
+        "entry_id": { "name": "Config entry", "description": "Which vehicle." }
+      }
+    },
+    "set_config": {
+      "name": "Set config",
+      "description": "Publishes a retained cfg payload to the device.",
+      "fields": {
+        "entry_id": { "name": "Config entry", "description": "Which vehicle." },
+        "config": { "name": "Config", "description": "Keys from docs/05 section 5.6." }
+      }
+    }
+  }
+}

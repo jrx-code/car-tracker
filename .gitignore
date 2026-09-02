@@ -1,0 +1,18 @@
+# Secrets: never commit. Values live in menedzer hasel.
+firmware/src/config.h
+*.env
+.secrets
+
+# PlatformIO
+firmware/.pio/
+firmware/.vscode/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Editors, OS
+.idea/
+*.swp
+.DS_Store
