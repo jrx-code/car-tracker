@@ -22,6 +22,7 @@
 //   NEO-6M GND -> ESP32 GND
 #include <Arduino.h>
 #include <ArduinoOTA.h>
+#include <driver/gpio.h>
 #include <ESPmDNS.h>
 #include <TinyGPSPlus.h>
 #include <WebServer.h>
@@ -58,7 +59,11 @@ constexpr uint32_t PIN_DWELL_MS = 900;
 String pin_scan_result = "nie uruchomiony";
 bool pin_scan_running = false;
 
-HardwareSerial gpsSerial(1);
+// UART2, not UART1. On the classic ESP32 UART1 defaults to GPIO9/10, which are
+// wired to the SPI flash; remapping is supposed to work but the loopback test
+// failed on UART1 with the pins proven connected by the GPIO matrix, so this
+// port is the one that gets used.
+HardwareSerial gpsSerial(2);
 TinyGPSPlus gps;
 WebServer server(80);
 
@@ -73,6 +78,22 @@ bool echo_raw = false;  // off by default: raw NMEA drowns everything else
 String scan_summary = "not run yet";
 String wifi_state = "laczenie";
 
+// Attach the UART to its pins and pull the RX line up WITHOUT pinMode().
+//
+// pinMode() calls perimanClearPinBus(), which hands the pin from the UART back
+// to plain GPIO. Calling it on an RX pin therefore silences the receiver while
+// leaving every API call looking successful: begin() returns, the pin still
+// reads correctly with digitalRead(), and available() simply never fires.
+// gpio_set_pull_mode() touches only the pull resistors and leaves the peripheral
+// routing alone, which is what the idle-high UART line actually needs.
+void attachGnssUart(int rx_pin, int tx_pin, uint32_t baud) {
+  gpsSerial.end();
+  gpsSerial.begin(baud, SERIAL_8N1, rx_pin, tx_pin);
+  if (rx_pin < 34) {  // 34-39 have no internal pull resistors at all
+    gpio_set_pull_mode(static_cast<gpio_num_t>(rx_pin), GPIO_PULLUP_ONLY);
+  }
+}
+
 struct ScanResult {
   uint32_t bytes;
   uint32_t sentences;
@@ -83,7 +104,7 @@ ScanResult tryBaud(uint32_t baud) {
   // every pin and deletes the UART driver, and re-begin()ing UART1 in a loop
   // floods the USB console with repeated output. One begin() in setup(), rate
   // changes only, keeps the port stable.
-  gpsSerial.updateBaudRate(baud);
+  attachGnssUart(PIN_GNSS_RX, PIN_GNSS_TX, baud);
   delay(150);
   while (gpsSerial.available()) gpsSerial.read();  // drop partial frames
 
@@ -151,7 +172,7 @@ void scan() {
   }
 
   scan_summary = summary;
-  gpsSerial.updateBaudRate(detected_baud);
+  attachGnssUart(PIN_GNSS_RX, PIN_GNSS_TX, detected_baud);
   Serial.println("\nLive view. Console: 'r' toggles raw NMEA, 's' rescans.");
 }
 
@@ -167,8 +188,7 @@ void scanPins() {
 
   for (size_t i = 0; i < SCAN_PIN_COUNT; i++) {
     const int pin = SCAN_PINS[i];
-    gpsSerial.setPins(pin, PARK_TX_PIN);
-    if (pin < 34) pinMode(pin, INPUT_PULLUP);  // 34+ have no internal pull-up
+    attachGnssUart(pin, PARK_TX_PIN, 9600);
     delay(60);
     while (gpsSerial.available()) gpsSerial.read();
 
@@ -210,12 +230,79 @@ void scanPins() {
   }
 
   pin_scan_result = out;
-  gpsSerial.setPins(PIN_GNSS_RX, PIN_GNSS_TX);
-  pinMode(PIN_GNSS_RX, INPUT_PULLUP);
+  attachGnssUart(PIN_GNSS_RX, PIN_GNSS_TX, detected_baud ? detected_baud : BAUDS[0]);
   pin_scan_running = false;
 }
 
 String loopback_result = "nie uruchomiony";
+String matrix_result = "nie uruchomiony";
+
+// Pins usable as a plain digital output for the connectivity matrix. 34-39 are
+// input only so they can be sensed but never driven; strapping pins, the USB
+// console and the flash pins stay out.
+constexpr int MATRIX_PINS[] = {26, 27, 16, 17, 25, 32, 33, 4,
+                               5,  13, 14, 18, 19, 21, 22, 23};
+constexpr size_t MATRIX_COUNT = sizeof(MATRIX_PINS) / sizeof(MATRIX_PINS[0]);
+
+// Which pins are physically wired together, tested below the UART entirely.
+// Every pin is pulled up as an input, then one pin at a time is driven low and
+// the rest are read: whatever follows it down shares a wire with it. This
+// answers "is the jumper really between 26 and 27, and do those pins work"
+// without trusting the serial driver, the baud rate or the pin mapping.
+void gpioMatrix() {
+  Serial.println("\n=== GPIO connectivity matrix ===");
+  String out;
+  int pairs = 0;
+
+  for (size_t i = 0; i < MATRIX_COUNT; i++) {
+    for (size_t k = 0; k < MATRIX_COUNT; k++) {
+      pinMode(MATRIX_PINS[k], INPUT_PULLUP);
+    }
+    delay(5);
+
+    const int driver = MATRIX_PINS[i];
+    pinMode(driver, OUTPUT);
+    digitalWrite(driver, LOW);
+    delayMicroseconds(500);
+
+    String followers;
+    for (size_t k = 0; k < MATRIX_COUNT; k++) {
+      const int probe_pin = MATRIX_PINS[k];
+      if (probe_pin == driver) continue;
+      if (digitalRead(probe_pin) != LOW) continue;
+
+      // Confirm it follows back up, so a pin held low by something else is not
+      // mistaken for a connection.
+      digitalWrite(driver, HIGH);
+      delayMicroseconds(500);
+      const bool followed_up = digitalRead(probe_pin) == HIGH;
+      digitalWrite(driver, LOW);
+      delayMicroseconds(500);
+      if (followed_up) {
+        followers += " GPIO" + String(probe_pin);
+        pairs++;
+      }
+    }
+    if (followers.length()) {
+      out += "GPIO" + String(driver) + " polaczone z:" + followers + "\n";
+      Serial.printf("  GPIO%d ->%s\n", driver, followers.c_str());
+    }
+    pinMode(driver, INPUT_PULLUP);
+  }
+
+  if (!pairs) {
+    out = "Zadne dwa piny nie sa ze soba polaczone.\n"
+          "Jesli zworka miedzy GPIO26 a GPIO27 jest zalozona, to albo nie ma "
+          "kontaktu, albo trafia w inne piny niz sadzisz.";
+  } else {
+    out = "Wykryte polaczenia miedzy pinami:\n\n" + out;
+  }
+  matrix_result = out;
+
+  // Hand the UART its pins back. A full re-begin is required, not setPins():
+  // the matrix ran pinMode() on these pins, which detached them from the UART.
+  attachGnssUart(PIN_GNSS_RX, PIN_GNSS_TX, detected_baud ? detected_baud : BAUDS[0]);
+}
 
 // Loopback self test. Sends a pattern on the TX pin and looks for it on the RX
 // pin. With a jumper between GPIO26 and GPIO27 a pass proves the ESP32 side is
@@ -223,9 +310,7 @@ String loopback_result = "nie uruchomiony";
 // its power. Without the jumper it must fail, which is also worth knowing.
 void loopbackTest() {
   Serial.println("\n=== UART loopback self test ===");
-  gpsSerial.setPins(PIN_GNSS_RX, PIN_GNSS_TX);
-  gpsSerial.updateBaudRate(9600);
-  pinMode(PIN_GNSS_RX, INPUT_PULLUP);
+  attachGnssUart(PIN_GNSS_RX, PIN_GNSS_TX, 9600);
   delay(50);
   while (gpsSerial.available()) gpsSerial.read();
 
@@ -234,9 +319,23 @@ void loopbackTest() {
   gpsSerial.flush();
 
   String got;
+  String hex;
+  uint32_t total = 0;
   const uint32_t deadline = millis() + 700;
   while (millis() < deadline) {
-    while (gpsSerial.available()) got += static_cast<char>(gpsSerial.read());
+    while (gpsSerial.available()) {
+      const uint8_t b = gpsSerial.read();
+      total++;
+      if (got.length() < 200) got += static_cast<char>(b);
+      // Raw bytes reach the page as hex. Line noise carries control codes and
+      // NULs, and those cut the HTML short, so a failed test renders as an
+      // empty box instead of a diagnosis.
+      if (total <= 48) {
+        char buf[4];
+        snprintf(buf, sizeof(buf), "%02X ", b);
+        hex += buf;
+      }
+    }
     delay(1);
   }
 
@@ -247,9 +346,10 @@ void loopbackTest() {
         " wrocilo na GPIO" + String(PIN_GNSS_RX) +
         ".\nUART i piny po stronie ESP32 sa sprawne, wiec problem jest w module "
         "GPS albo w jego zasilaniu.\nOdebrano " + String(got.length()) + " B.";
-  } else if (got.length()) {
-    loopback_result = "CZESCIOWO: przyszlo " + String(got.length()) +
-                      " B, ale bez wzorca. Zla predkosc albo zaklocenia.\n" + got;
+  } else if (total) {
+    loopback_result = "CZESCIOWO: przyszlo " + String(total) +
+                      " B, ale bez wzorca. Zla predkosc albo zaklocenia.\n"
+                      "Pierwsze bajty (hex): " + hex;
   } else {
     loopback_result =
         "FAIL: nic nie wrocilo.\nJesli zworka miedzy GPIO" + String(PIN_GNSS_TX) +
@@ -258,6 +358,58 @@ void loopbackTest() {
         "Bez zworki ten wynik jest oczekiwany.";
   }
   Serial.println(loopback_result);
+}
+
+String tx_test_result = "nie uruchomiony";
+
+
+// Does the UART TX pin actually move? Sends a long burst and samples the RX pin
+// with digitalRead at the same time, counting edges. With the jumper in place:
+//   edges > 0  -> TX drives the line, so the fault is on the receive path
+//   edges == 0 -> the UART is not transmitting at all, whatever the API says
+// This separates "TX is silent" from "RX is deaf", which the loopback test on
+// its own cannot do.
+void txTest() {
+  Serial.println("\n=== UART TX pin activity test ===");
+  attachGnssUart(PIN_GNSS_RX, PIN_GNSS_TX, 9600);
+  delay(20);
+
+  // Deliberately steals the RX pin from the UART for the duration of the test;
+  // attachGnssUart() below gives it back.
+  pinMode(PIN_GNSS_RX, INPUT);
+  int last = digitalRead(PIN_GNSS_RX);
+  uint32_t edges = 0;
+  uint32_t lows = 0, highs = 0;
+
+  const uint32_t deadline = millis() + 400;
+  uint32_t sent = 0;
+  while (millis() < deadline) {
+    if (gpsSerial.availableForWrite() > 16) {
+      gpsSerial.write('U');  // 0x55 alternates bits, so every bit period toggles
+      sent++;
+    }
+    const int now = digitalRead(PIN_GNSS_RX);
+    if (now != last) edges++;
+    if (now) highs++; else lows++;
+    last = now;
+  }
+
+  tx_test_result = "wyslano " + String(sent) + " B, zbocza na GPIO" +
+                   String(PIN_GNSS_RX) + ": " + String(edges) +
+                   " (probek H=" + String(highs) + " L=" + String(lows) + ")\n";
+  if (edges > 10) {
+    tx_test_result +=
+        "TX RUSZA linia. Nadajnik dziala, wiec wina jest po stronie odbioru.";
+  } else if (lows > highs) {
+    tx_test_result +=
+        "Linia trzymana nisko. Cos zwiera ja do masy albo pin jest uszkodzony.";
+  } else {
+    tx_test_result +=
+        "TX NIE RUSZA linia. UART nie nadaje mimo write(), albo pin nie jest "
+        "podpiety do UART.";
+  }
+  Serial.println(tx_test_result);
+  attachGnssUart(PIN_GNSS_RX, PIN_GNSS_TX, detected_baud ? detected_baud : BAUDS[0]);
 }
 
 String fixAgeText() {
@@ -341,9 +493,15 @@ void handleRoot() {
   html += pin_scan_result;
   html += F("</pre><h1>Test petli UART</h1><pre>");
   html += loopback_result;
+  html += F("</pre><h1>Macierz polaczen GPIO</h1><pre>");
+  html += matrix_result;
+  html += F("</pre><h1>Test nadajnika UART</h1><pre>");
+  html += tx_test_result;
   html += F("</pre><p><a href='/rescan'>Powtorz skan predkosci</a> &middot; "
             "<a href='/scanpins'>Szukaj modulu na wszystkich pinach</a> &middot; "
             "<a href='/loopback'>Test petli (zewrzyj GPIO26-GPIO27)</a> &middot; "
+            "<a href='/matrix'>Macierz polaczen GPIO</a> &middot; "
+            "<a href='/txtest'>Test nadajnika UART</a> &middot; "
             "<a href='/json'>JSON</a></p></body></html>");
 
   server.send(200, "text/html; charset=utf-8", html);
@@ -367,6 +525,8 @@ void handleJson() {
   j += ",\"ttff_s\":" + String(first_fix_ms ? (first_fix_ms - boot_ms) / 1000.0 : 0.0, 1);
   j += ",\"rssi\":" + String(WiFi.RSSI());
   j += ",\"uptime_s\":" + String((millis() - boot_ms) / 1000);
+  j += ",\"loopback\":\"" + loopback_result.substring(0, 100) + "\"";
+  j += ",\"txtest\":\"" + tx_test_result.substring(0, 160) + "\"";
   j += "}";
   server.send(200, "application/json", j);
 }
@@ -414,17 +574,27 @@ void setup() {
   boot_ms = millis();
   pinMode(PIN_LED, OUTPUT);
 
-  gpsSerial.begin(BAUDS[0], SERIAL_8N1, PIN_GNSS_RX, PIN_GNSS_TX);
   // An idle UART line sits high. Without the pull-up a disconnected RX pin
   // floats and delivers noise bytes, which reads exactly like "module present
-  // but wrong baud rate". With it, "nothing connected" means zero bytes.
-  pinMode(PIN_GNSS_RX, INPUT_PULLUP);
+  // but wrong baud rate". The pull-up must not go through pinMode(), see
+  // attachGnssUart().
+  attachGnssUart(PIN_GNSS_RX, PIN_GNSS_TX, BAUDS[0]);
 
   connectWifi();
 
   server.on("/", handleRoot);
   server.on("/json", handleJson);
   server.on("/rescan", handleRescan);
+  server.on("/txtest", []() {
+    server.sendHeader("Location", "/");
+    server.send(303);
+    txTest();
+  });
+  server.on("/matrix", []() {
+    server.sendHeader("Location", "/");
+    server.send(303);
+    gpioMatrix();
+  });
   server.on("/loopback", []() {
     server.sendHeader("Location", "/");
     server.send(303);
