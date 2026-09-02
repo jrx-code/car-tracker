@@ -6,8 +6,24 @@ podpięcie, co realnie da się wyciągnąć z ND1 2016, i podział pracy na siln
 pracujący i zgaszony, bo to jest jedyna rzecz, która decyduje o tym, czy urządzenie
 rozładuje akumulator.
 
-Warunek wejścia bez zmian: v1 chodzi w aucie co najmniej miesiąc, a pomiar drainu
-potwierdza budżet z `04-zasilanie-obd.md`.
+### Dwie rzeczy, które trzeba rozdzielić
+
+Warunek wejścia „v1 chodzi miesiąc, drain potwierdzony" dotyczy **urządzenia
+wpiętego na stałe**, które wisi na pinie 16 i samo gada z magistralą. Tam ryzyko
+jest realne i gate zostaje.
+
+**Sam nasłuch nie ma z tym nic wspólnego** i można go robić od zaraz. Sonda
+z `firmware/probe-can/` chodzi z powerbanku, wpina się do gniazda tylko na czas
+jazdy i wyjmuje przy wysiadaniu. Nie pobiera z auta prądu poza mikroamperami
+przez masę, nie zostaje w aucie na noc, a w trybie listen only nie wystawia na
+magistralę nawet bitu potwierdzenia. Wszystkie powody, dla których faza 2 czekała,
+są powodami dotyczącymi zasilania i stałego montażu, nie odczytu.
+
+| Co | Warunek | Kiedy |
+|---|---|---|
+| Nasłuch sondą z powerbanku (K1-K3) | transceiver, wtyk OBD, terminator usunięty | od zaraz |
+| Zapytania trybu 01 i 09 (K4) | K1-K3 zamknięte, silnik pracuje | po nasłuchu |
+| Odczyt w urządzeniu wpiętym na stałe (K5-K6) | v1 chodzi miesiąc, drain potwierdzony wg `04` | po fazie 3 z `11` |
 
 ## 6.1 Dwie drogi do danych, bierzemy obie, ale nie naraz
 
@@ -208,18 +224,39 @@ a wtedy wolimy stracić dane niż akumulator.
 
 ## 6.5 Etapy
 
+Kroki K1-K4 robi sonda `firmware/probe-can/`: ESP32 z powerbanku, transceiver,
+wtyk OBD, wszystko widoczne przez przeglądarkę na telefonie. Bez laptopa w aucie.
+
 | Krok | Co | Kryterium zamknięcia |
 |---|---|---|
-| K1 | Pomiar, która para pinów ma jaki ruch i z jaką prędkością w ND1 | zapisane w tym pliku, tabela z 6.2 zastąpiona wynikiem |
-| K2 | Transceiver na stole, `listen only`, zrzut ruchu z 15 min jazdy do pliku | zrzut istnieje, zero ramek wysłanych (potwierdzone drugim urządzeniem na magistrali) |
-| K3 | Analiza offline: potwierdzić `0x202`, `0x078`, `0x086`, znaleźć paliwo, temperaturę i bieg | każdy sygnał potwierdzony na co najmniej trzech niezależnych przejazdach, nie na jednym |
-| K4 | Zapytania trybu 01, bitmaski wsparcia, lista realnie obsługiwanych PID-ów w ND1 | tabela z 6.3 zastąpiona zmierzoną listą |
-| K5 | Load switch i maszyna stanów z 6.4, pomiar poboru w `PARKED` z zamontowanym transceiverem | pobór nie wzrósł mierzalnie względem v1 |
+| K1 | Która para pinów ma ruch i z jaką prędkością w ND1 | sonda, `/scan`. Tabela z 6.2 zastąpiona wynikiem |
+| K2 | Zrzut ruchu z 15 min jazdy | sonda zbiera tabelę ID; CSV zapisany do `hardware/can/` |
+| K3 | Potwierdzić `0x202`, `0x078`, `0x086`, znaleźć paliwo, temperaturę i bieg | każdy sygnał potwierdzony na co najmniej trzech niezależnych przejazdach, nie na jednym |
+| K4 | Lista realnie obsługiwanych PID-ów trybu 01 w ND1 | tabela z 6.3 zastąpiona zmierzoną listą. **Wymaga wyjścia z listen only**, więc dopiero po K1-K3 i tylko przy pracującym silniku |
+| K5 | Load switch i maszyna stanów z 6.4 w docelowym urządzeniu | pobór w `PARKED` nie wzrósł mierzalnie względem v1 |
 | K6 | VIN z trybu 09 wpisywany do pustego pola ustawień | VIN z auta zgadza się z tabliczką |
+
+K1-K3 są w całości pasywne. K4 jest pierwszym krokiem, który cokolwiek wysyła,
+i dlatego jest po nich, a nie przed: zanim zapytamy, chcemy wiedzieć, że
+rozumiemy, co na tej magistrali się dzieje.
 
 K3 jest najdłuższy i nie da się go skrócić. Dopasowanie sygnału do jednej jazdy to
 nie jest dopasowanie, tylko zbieg okoliczności; poziom paliwa zmienia się na tyle
 wolno, że w jednym przejeździe wygląda jak dowolny inny wolno pełzający licznik.
+
+### Jak sonda skraca K3
+
+Surowy zrzut magistrali 500 kb/s to tysiące ramek na sekundę i nikt tego nie
+czyta. Sonda nie zapisuje ramek, tylko buduje tabelę: identyfikator, częstotliwość
+i **maska, które bajty w ogóle się ruszyły**, plus zakres min-max dla każdego
+bajtu. Kandydatów na poziom paliwa szuka się wtedy nie w tysiącach ramek, tylko
+wśród bajtów, które są zmienne, mają wąski zakres i siedzą w ramce o niskiej
+częstotliwości. Dla wybranego ID sonda prowadzi log samych zmian, z czasem, więc
+widać przebieg wartości w trakcie jazdy zamiast migawki.
+
+Test rozstrzygający dla paliwa jest banalny i nie wymaga narzędzi: zatankować do
+pełna i sprawdzić, który kandydat skoczył do sufitu. Dla temperatury: zrzut
+z zimnego silnika i po dziesięciu minutach jazdy.
 
 ## 6.6 Ryzyka
 

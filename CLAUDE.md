@@ -10,6 +10,8 @@ raportujący do Home Assistant przez MQTT.
   bezpieczeństwo (09), różnice między autami (10), plan wdrożenia (11)
 - `firmware/` — PlatformIO, ESP32, 5 środowisk (wifi_dev + 4 warianty modemu)
 - `firmware/probe/` — osobny mini projekt do bring-upu GPS (skan baud rate, diagnostyka NMEA)
+- `firmware/probe-can/` — sonda CAN: skan prędkości magistrali, tabela ID z maską
+  zmiennych bajtów, log zmian, CSV. Listen only, zasilanie z powerbanku, GUI przez WiFi
 - `ha-integration/custom_components/car_tracker/` — integracja HA
 - `tools/sim_track.py` — symulator telemetrii, testy bez sprzętu
 
@@ -26,7 +28,9 @@ raportujący do Home Assistant przez MQTT.
   w `telemetry/store.cpp`, inaczej stara kolejka zostanie odczytana jako śmieci.
 - Zmiana pakietu w `telemetry/packet.cpp` wymaga zmiany parsera w
   `ha-integration/.../coordinator.py`. Format jest w `docs/05`.
-- Nic nie jest wysyłane na magistralę CAN auta. Faza 2 jest pasywna, warunki w `docs/06`.
+- Nic nie jest wysyłane na magistralę CAN auta. Nasłuch (K1-K3 z `docs/06`) jest
+  pasywny i nie zależy od gate'u fazy 2: sonda chodzi z powerbanku i wychodzi
+  z auta razem z kierowcą. Gate dotyczy stałego montażu i zasilania z pinu 16.
 - **`config.h` to ustawienia fabryczne, nie konfiguracja.** Wartości robocze są w NVS
   i edytuje się je w portalu (`docs/13`). Nowe ustawienie dodaje się w
   `settings.h/.cpp` i w `portal_page.h`, nie przez kolejny `#define`.

@@ -18,3 +18,5 @@ __pycache__/
 .DS_Store
 firmware/probe/.pio/
 firmware/probe/src/secrets.h
+firmware/probe-can/.pio/
+firmware/probe-can/src/secrets.h
