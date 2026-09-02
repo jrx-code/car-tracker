@@ -5,16 +5,26 @@ Katalog `ha-integration/custom_components/car_tracker`. Docelowo HA 2026.8.3
 
 ## 8.1 Instalacja
 
-```bash
-scp -r ha-integration/custom_components/car_tracker hassio:/config/custom_components/
-# restart HA, potem Ustawienia -> Urządzenia i usługi -> Dodaj integrację -> Car Tracker
-```
+**Nic się nie instaluje.** Encje powstają z MQTT discovery publikowanego przez
+`tracker-hub` (uzasadnienie w 8.3), więc wystarczy, że HA ma skonfigurowaną
+integrację MQTT wskazującą na tego samego brokera. Konfiguracje są retained,
+więc pojawiają się same przy pierwszym połączeniu.
 
-Zapis do `/config` przez SMB, jeśli scp odmawia. Restart prod HA tylko po
-uzgodnieniu, nigdy w środku dnia bez zapowiedzi.
+Nowy tracker też pojawia się sam: hub ogłasza każdy pojazd, o którym dowie się
+z tematu `info` albo `tel`.
 
-Konfiguracja: `vehicle_id` (musi być identyczny jak w NVS urządzenia, bo z niego
-powstaje temat MQTT), nazwa wyświetlana i prefiks tematów. Jeden wpis na auto.
+Uwaga na wspólnego brokera: retained konfiguracje discovery widzi **każdy** HA
+podpięty do EMQX, także produkcyjny. Jeżeli testowa instancja ma nie mieszać
+prodowi, trzeba zmienić `HA_DISCOVERY_PREFIX` w hubie, a nie liczyć na to, że
+prod tego nie zobaczy.
+
+### Adres zamiast współrzędnych
+
+Encja `device_tracker.<auto>` podpięta pod integrację `places` daje sensor
+z adresem, tak samo jak dla osób. Konfiguracja skopiowana z wpisu „Osoba":
+`options: zone, place`, `map_provider: osm`, `language: pl`,
+`home_zone: zone.home`, `use_gps_accuracy: true`. W strefie encja pokazuje
+nazwę strefy, adres dopiero poza nią.
 
 ## 8.2 Encje
 
@@ -116,16 +126,33 @@ Czego nie ma za darmo:
 - Nazwy encji ustala discovery, nie my. Przy migracji trzeba przejrzeć
   automatyzacje, choć dziś nie ma żadnej, bo integracja nigdy nie została wdrożona.
 
-### Czego ta analiza nie rozstrzyga
+### Rozstrzygnięte: discovery, zweryfikowane na żywo 2026-09-02
 
-Nie sprawdziłem, czy któraś encja z tabeli 8.2 wymaga czegoś, czego discovery
-nie wystawia; sprawdzone są typy, nie każde pole każdej encji. Przed usunięciem
-integracji trzeba przejść tabelę 8.2 wiersz po wierszu na VM103
-(`198.51.100.10:8123`), a nie na prodzie.
+Warunek z pierwszej wersji tego punktu został spełniony. Hub publikuje
+discovery, HA na VM103 utworzyło **21 encji na pojazd**, 42 na dwa auta,
+i to pokrywa całą tabelę 8.2.
 
-**Decyzja jest odłożona.** Integracja zostaje w repo do czasu, aż discovery
-z huba pokaże komplet encji na maszynie testowej. Dopiero wtedy ma sens
-cokolwiek kasować.
+Test GPS end to end: naciśnięcie `Zlokalizuj teraz` w HA poszło na `cmd`,
+urządzenie zrobiło fix i odesłało pozycję, a `device_tracker.nd1` pokazał
+52.0000000, 21.0000000, dokładność 3,0 m i 7 satelitów, zgodnie co do cyfry
+z tym, co zapisał hub. Dokładność liczona z HDOP tak samo jak w integracji
+(HDOP × 2,5 m).
+
+Dwie rzeczy wyszły dopiero na żywo i obie są naprawione:
+
+1. **Po restarcie HA nie było wiadomo, gdzie stoi auto**, bo `pos` i `tel` nie
+   były retained. Naprawione w firmware, opis w `05` punkt 5.1.
+2. **Auto offline znikało z mapy**, bo `device_tracker` miał `availability_topic`.
+   Usunięte z tej jednej encji; pozostałe je zachowały, żeby offline urządzenie
+   nie pokazywało nieaktualnego napięcia.
+
+Encje pochodne (cztery sensory przejazdu) czytają temat huba, wszystkie
+pozostałe czytają tematy urządzenia. Test w repo huba pilnuje, żeby liczba
+encji zależnych od huba nie urosła.
+
+**Integracja `custom_components/car_tracker` nie jest już potrzebna.** Zostaje
+w repo jako referencja do czasu, aż discovery przechodzi pełny sezon w aucie;
+nie instalować jej równolegle z discovery, bo obie utworzyłyby te same encje.
 
 ## 8.4 Odporność na złe dane
 
