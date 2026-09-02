@@ -24,7 +24,30 @@ AP wiszący dobę w zaparkowanym aucie to pobór prądu i ryzyko.
 Do AP dołożony jest DNS przechwytujący wszystkie nazwy, więc telefon po połączeniu
 ląduje na stronie zamiast na błędzie przeglądarki.
 
-## 13.2 Tryb admin
+## 13.2 Układ panelu
+
+Jedna strona, żadnej nawigacji. Na górze status w kafelkach i trzy plakietki
+(sieć, MQTT, GPS), niżej zwijane sekcje, na dole przyklejony pasek z hasłem
+administratora i przyciskiem zapisu.
+
+- **Sekcje zwijane.** Siedem: Pojazd, WiFi, AP awaryjny, MQTT, LTE, Piny,
+  Portal i serwis. Które są otwarte, pamięta przeglądarka, więc powrót do
+  poprawiania jednego pola nie zaczyna się od przewijania wszystkiego.
+- **Objaśnienie przy każdym polu.** Nie tylko co to jest, ale co się stanie:
+  „za krótki czas oznacza, że AP wstaje przy każdym mrugnięciu sieci",
+  „trzy błędne próby PIN to wyjazd do auta".
+- **Walidacja przy wpisywaniu.** Pole robi się czerwone, komunikat pojawia się
+  pod nim, a nagłówek zwiniętej sekcji pokazuje licznik błędów. Próba zapisu
+  z błędami rozwija sekcje, w których siedzą, zamiast zostawiać szukanie.
+- **Pasek zapisu pojawia się dopiero po zmianie czegokolwiek** i mówi wprost,
+  że zmiany nie są zapisane. Wyjście ze strony z niezapisanymi zmianami pyta
+  o potwierdzenie.
+
+Reguły walidacji w przeglądarce są kopią tych, które wymusza firmware. Sprawdzenie
+po stronie urządzenia zostaje mimo to: portal jest tylko jednym z klientów API,
+a walidacja w przeglądarce jest wygodą, nie zabezpieczeniem.
+
+## 13.3 Tryb admin
 
 Przycisk **Tryb admin** odsłania panel ustawień. Bez klikania widać tylko status.
 
@@ -40,7 +63,7 @@ Rozdział odpowiedzialności jest celowy:
   zapisie oznacza „nie zmieniaj", więc wysłanie formularza bez wpisywania haseł
   niczego nie kasuje.
 
-## 13.3 Co da się ustawić
+## 13.4 Co da się ustawić
 
 ### Pojazd
 
@@ -125,9 +148,9 @@ start) oraz wartości spoza 0-39. RX i TX GNSS nie mogą być tym samym pinem.
 
 Akcje: restart, ustawienia fabryczne (z potwierdzeniem), ręczne podniesienie AP.
 
-## 13.4 Czego świadomie nie ma
+## 13.5 Czego świadomie nie ma
 
-- **Uwierzytelniania na odczyt.** Uzasadnienie w 13.2.
+- **Uwierzytelniania na odczyt.** Uzasadnienie w 13.3.
 - **HTTPS na urządzeniu.** Certyfikat na ESP32 w aucie oznaczałby albo certyfikat
   samopodpisany z ostrzeżeniem w przeglądarce, albo odnawianie czegoś, do czego nie
   ma dostępu z zewnątrz. Portal jest osiągalny z LAN albo z własnego AP urządzenia.
@@ -137,7 +160,7 @@ Akcje: restart, ustawienia fabryczne (z potwierdzeniem), ręczne podniesienie AP
 - **Zapisu logów na urządzeniu.** Flash jest zajęty kolejką pozycji, a kolejka jest
   ważniejsza.
 
-## 13.5 Certyfikat brokera: pułapka, która kosztowała pół godziny
+## 13.6 Certyfikat brokera: pułapka, która kosztowała pół godziny
 
 Broker `mqtt.example.lan` podaje łańcuch zakotwiczony w **ISRG Root YR**, a nie
 w ISRG Root X1. Root YR jest cross-signed przez X1, więc przeglądarka i OpenSSL
@@ -160,7 +183,7 @@ i wkleja w portalu. Zasada na przyszłość: dla klienta na BearSSL bierz kotwic
 **z łańcucha, który realnie wysyła serwer**, a nie ogólnie znany root tej samej
 marki. Root YR wygasa 2032-09-02, więc do tego czasu temat wraca.
 
-## 13.6 Co wymaga restartu
+## 13.7 Co wymaga restartu
 
 Zapis ustawień jest natychmiastowy w NVS, ale nie wszystko przeładowuje się w locie.
 Restart jest potrzebny po zmianie: pinów, prędkości GNSS, parametrów sieci WiFi,

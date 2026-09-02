@@ -389,9 +389,14 @@ String statusJson() {
   doc["fix"] = gnss::hasFix();
   if (gnss::hasFix()) {
     doc["hdop"] = gnss::hdop();
-    if (have_last_pos) {
-      doc["lat"] = last_pos.lat_e7 / 1e7;
-      doc["lon"] = last_pos.lon_e7 / 1e7;
+    // Straight from the receiver, not from the last transmitted point: while
+    // parked nothing is transmitted, so the buffered position stays empty and
+    // the page would claim "no position" next to a healthy satellite count.
+    PosRecord now = {};
+    if (gnss::fill(now, 99.0f)) {
+      doc["lat"] = now.lat_e7 / 1e7;
+      doc["lon"] = now.lon_e7 / 1e7;
+      doc["speed"] = now.spd_ckmh / 100.0;
     }
   }
   const float vbat = power::readVbat();
@@ -455,6 +460,17 @@ void loop() {
     // A failing TLS handshake is slow and noisy; back off instead of hammering.
     static uint32_t last_retry = 0;
     static uint16_t retry_gap_s = 15;
+    // The first attempt happens before the portal has finished joining WiFi, so
+    // it always fails and would otherwise push the backoff to minutes before the
+    // link is even up. Reset it the moment the network appears.
+    static bool had_link = false;
+    const bool link = portal::staConnected();
+    if (link && !had_link) {
+      retry_gap_s = 5;
+      last_retry = 0;
+    }
+    had_link = link;
+
     if (millis() - last_retry > retry_gap_s * 1000UL) {
       last_retry = millis();
       if (connectAndAnnounce()) {

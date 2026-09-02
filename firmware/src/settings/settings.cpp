@@ -326,6 +326,7 @@ String toJson() {
   doc["pin_i2c_scl"] = s.pin_i2c_scl;
   doc["pin_led"] = s.pin_led;
 
+  doc["admin_pass_set"] = s.admin_pass[0] != '\0';
   doc["portal_enabled"] = s.portal_enabled;
   doc["ota_enabled"] = s.ota_enabled;
 
