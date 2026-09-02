@@ -37,8 +37,8 @@ i to z dwóch niezależnych powodów:
    `BluetoothSerial`, ani `BLE` (sprawdzone `ls`, katalogów nie ma). Każde
    użycie BT zaczyna się tu od dokładania zależności.
 
-**Decyzja: transportem PoC jest WiFi**, hotspot z telefonu w aucie i domowe
-WiFi w garażu. Bluetooth wraca do rozważenia dopiero, gdyby PoC pokazał, że
+**Decyzja: transportem PoC jest WiFi**, `IoT-SSID` w domu (punkt 12.5) i hotspot
+z telefonu w aucie. Bluetooth wraca do rozważenia dopiero, gdyby PoC pokazał, że
 hotspot jest niewygodny na tyle, żeby uzasadnić pracę z BTStack.
 
 ## 12.3 Narzędzie: `firmware/probe`
@@ -84,7 +84,49 @@ Dodatkowo pin RX ma `INPUT_PULLUP`. Linia UART w spoczynku jest wysoka, więc be
 podciągnięcia niepodłączone wejście łapie szum i skaner melduje bajty, których
 nie ma. Z podciągnięciem "nic nie podłączone" znaczy dokładnie zero bajtów.
 
-## 12.5 Podłączenie NEO-6M
+## 12.5 WiFi: probe działa bez komputera
+
+Probe łączy się z **IoT-SSID** i wystawia cały status po HTTP, więc płytka
+może leżeć na parapecie albo w aucie, zasilana z powerbanka, bez kabla do laptopa.
+
+Parametry sieci sprawdzone w kontrolerze kontroler WiFi przed wgraniem, nie założone:
+
+| | |
+|---|---|
+| Zabezpieczenie | WPA2-PSK, CCMP |
+| PMF | wyłączone |
+| Pasmo | wyłącznie 2,4 GHz |
+| Minimalna prędkość | 1 Mb/s |
+| Sieć | VLAN 40, `iot.example.lan`, 192.0.2.0/24, DHCP od .6 |
+| Izolacja L2 | wyłączona |
+
+To komplet warunków, przy których ESP32 łączy się bez niespodzianek. WPA3-only
+albo sieć 5 GHz by nie zadziałały, stąd sprawdzenie przed, a nie po.
+
+Zmierzone po wgraniu:
+
+| | |
+|---|---|
+| Adres | 192.0.2.42 (DHCP) |
+| RSSI | -64 dBm |
+| Strona | `http://192.0.2.42/` oraz `http://gps-probe.local/` |
+| Dostęp z LAN 198.51.100.0/24 | **działa**, sprawdzone `curl` i `ping` (rtt 38-67 ms) |
+| mDNS przez VLAN | **działa**, `gps-probe.local` rozwiązuje się z LAN |
+
+Endpointy: `/` (strona, odświeżanie co 3 s), `/json` (do skryptów i do wykresu),
+`/rescan` (ponowny skan portu bez restartu).
+
+Dioda na płytce: miga wolno przy szukaniu satelitów, świeci ciągle po złapaniu
+fixa. Dzięki temu wystawiony na parapet moduł mówi coś nawet bez zaglądania na stronę.
+
+Adres jest z DHCP, więc może się zmienić po dłuższym odłączeniu. `gps-probe.local`
+działa niezależnie od adresu. Jeśli przeszkadza, do zrobienia jest rezerwacja
+DHCP w kontroler WiFi na MAC `aa:bb:cc:dd:ee:ff`.
+
+Hasło do sieci pobrane z kontrolera kontroler WiFi i zapisane w `firmware/probe/src/secrets.h`,
+który jest w `.gitignore`. W repo jest tylko `secrets.example.h`.
+
+## 12.6 Podłączenie NEO-6M
 
 Cztery przewody. Piny zgodne z `firmware/include/pins.h`, więc to samo
 połączenie obsłuży probe i główny firmware.
@@ -113,9 +155,10 @@ Zimny start NEO-6M pod otwartym niebem to około 27 s, w gorszych warunkach
 kilka minut. Dioda na module zaczyna mrugać dopiero po złapaniu fixa, więc
 brak mrugania przez pierwszą minutę nie jest jeszcze objawem awarii.
 
-## 12.6 Co dalej
+## 12.7 Co dalej
 
-Po podłączeniu: `pio device monitor` w `firmware/probe` i zapisanie wyników
+Po podłączeniu: strona `http://gps-probe.local/` albo `pio device monitor`
+w `firmware/probe`, i zapisanie wyników
 (liczba satelitów, HDOP, czas do pierwszego fixa) do `hardware/pomiary.md`.
 Te liczby są wejściem do decyzji, czy NEO-6M zostaje, czy w wersji docelowej
 potrzebny jest odbiornik wielosystemowy (docs/03 punkt 3.1).
