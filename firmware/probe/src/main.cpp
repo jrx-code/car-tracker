@@ -21,6 +21,7 @@
 //   NEO-6M VCC -> ESP32 3V3 (5V only if 3V3 gives nothing)
 //   NEO-6M GND -> ESP32 GND
 #include <Arduino.h>
+#include <ArduinoOTA.h>
 #include <ESPmDNS.h>
 #include <TinyGPSPlus.h>
 #include <WebServer.h>
@@ -37,6 +38,19 @@ constexpr uint32_t BAUDS[] = {9600, 38400, 115200, 4800, 57600};
 constexpr size_t BAUD_COUNT = sizeof(BAUDS) / sizeof(BAUDS[0]);
 constexpr uint32_t SCAN_MS = 3000;
 constexpr const char* MDNS_NAME = "gps-probe";
+
+// Every GPIO that can be a UART RX on a classic ESP32 DevKit, in the order a
+// person is likely to have used one. Excluded: 0/2/12/15 (strapping, a module
+// pulling them at boot prevents startup), 1/3 (the USB console), 6-11 (SPI
+// flash). 34-39 are input only and have no internal pull-up, so they float and
+// are reported separately.
+constexpr int SCAN_PINS[] = {26, 16, 17, 25, 27, 32, 33, 4,  5,
+                             13, 14, 18, 19, 21, 22, 23, 35, 34, 36, 39};
+constexpr size_t SCAN_PIN_COUNT = sizeof(SCAN_PINS) / sizeof(SCAN_PINS[0]);
+constexpr uint32_t PIN_DWELL_MS = 900;
+
+String pin_scan_result = "nie uruchomiony";
+bool pin_scan_running = false;
 
 HardwareSerial gpsSerial(1);
 TinyGPSPlus gps;
@@ -135,6 +149,66 @@ void scan() {
   Serial.println("\nLive view. Console: 'r' toggles raw NMEA, 's' rescans.");
 }
 
+// Sweep every candidate pin looking for the receiver. Counting valid NMEA
+// sentences and not just bytes matters here: a floating input produces plenty
+// of bytes and no valid frames, so bytes alone would point at the wrong pin.
+void scanPins() {
+  pin_scan_running = true;
+  Serial.println("\n=== scanning pins for a GPS receiver ===");
+  String out;
+  int found_pin = -1;
+  uint32_t found_sentences = 0;
+
+  for (size_t i = 0; i < SCAN_PIN_COUNT; i++) {
+    const int pin = SCAN_PINS[i];
+    gpsSerial.setPins(pin, -1);
+    if (pin < 34) pinMode(pin, INPUT_PULLUP);  // 34+ have no internal pull-up
+    delay(60);
+    while (gpsSerial.available()) gpsSerial.read();
+
+    TinyGPSPlus probe;
+    uint32_t bytes = 0;
+    const uint32_t deadline = millis() + PIN_DWELL_MS;
+    while (millis() < deadline) {
+      while (gpsSerial.available()) {
+        probe.encode(gpsSerial.read());
+        bytes++;
+      }
+      server.handleClient();
+      delay(1);
+    }
+    const uint32_t ok = probe.passedChecksum();
+    if (bytes || ok) {
+      out += "GPIO" + String(pin) + ": " + String(bytes) + " B, " + String(ok) +
+             " ramek NMEA" + (pin >= 34 ? " (pin bez pull-up, mozliwy szum)" : "") + "\n";
+      Serial.printf("  GPIO%-2d: %5lu B, %3lu NMEA\n", pin, bytes, ok);
+    }
+    if (ok > found_sentences) {
+      found_sentences = ok;
+      found_pin = pin;
+    }
+  }
+
+  if (found_pin >= 0) {
+    out = "ZNALEZIONY na GPIO" + String(found_pin) + " (" + String(found_sentences) +
+          " ramek NMEA).\nPrzepnij na GPIO26 albo zmien PIN_GNSS_RX.\n\n" + out;
+    Serial.printf("\nRECEIVER FOUND on GPIO%d\n", found_pin);
+  } else if (out.length()) {
+    out = "Zadne wejscie nie dalo poprawnych ramek NMEA. Ponizej piny, na "
+          "ktorych cokolwiek bylo (najpewniej szum):\n\n" + out;
+  } else {
+    out = "Cisza na wszystkich " + String(SCAN_PIN_COUNT) +
+          " wejsciach. Modul nie nadaje: brak zasilania, brak wspolnej masy "
+          "albo uszkodzony. Zmierz miernikiem napiecie miedzy VCC a GND modulu.";
+    Serial.println("\nsilence on every candidate pin");
+  }
+
+  pin_scan_result = out;
+  gpsSerial.setPins(PIN_GNSS_RX, PIN_GNSS_TX);
+  pinMode(PIN_GNSS_RX, INPUT_PULLUP);
+  pin_scan_running = false;
+}
+
 String fixAgeText() {
   if (!gps.location.isValid()) return "brak";
   return String(gps.location.age() / 1000.0, 1) + " s temu";
@@ -212,7 +286,10 @@ void handleRoot() {
           " s</td></tr>";
   html += F("</table><h1>Skan portu</h1><pre>");
   html += scan_summary;
-  html += F("</pre><p><a href='/rescan'>Powtorz skan</a> &middot; "
+  html += F("</pre><h1>Skan pinow</h1><pre>");
+  html += pin_scan_result;
+  html += F("</pre><p><a href='/rescan'>Powtorz skan predkosci</a> &middot; "
+            "<a href='/scanpins'>Szukaj modulu na wszystkich pinach</a> &middot; "
             "<a href='/json'>JSON</a></p></body></html>");
 
   server.send(200, "text/html; charset=utf-8", html);
@@ -294,13 +371,26 @@ void setup() {
   server.on("/", handleRoot);
   server.on("/json", handleJson);
   server.on("/rescan", handleRescan);
+  server.on("/scanpins", []() {
+    server.sendHeader("Location", "/");
+    server.send(303);
+    scanPins();
+  });
   server.begin();
+
+  // OTA, so that diagnosing the wiring never again requires carrying the board
+  // back to the laptop: pio run -e gps_probe -t upload --upload-port gps-probe.local
+  ArduinoOTA.setHostname(MDNS_NAME);
+  ArduinoOTA.onStart([]() { Serial.println("OTA start"); });
+  ArduinoOTA.onError([](ota_error_t e) { Serial.printf("OTA error %u\n", e); });
+  ArduinoOTA.begin();
 
   scan();
   last_report = millis();
 }
 
 void loop() {
+  ArduinoOTA.handle();
   server.handleClient();
 
   // WiFi can drop; reconnect without blocking the GPS reader.
