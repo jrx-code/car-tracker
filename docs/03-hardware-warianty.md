@@ -140,6 +140,72 @@ Anteny są w BOM celowo osobno: umieszczenie anteny GNSS decyduje o jakości fix
 niż wybór między NEO-6M a M10. Wtyk OBD siedzi pod deską, gdzie jest metal i zero widoku
 nieba, więc antena musi wyjść na podszybie.
 
+## 3.9 Decyzja zakupowa: co konkretnie kupić na GPS i LTE
+
+Punkty 3.2-3.6 porównywały klasy modułów. To jest wybór konkretnej płytki,
+oparty na oficjalnym przeglądzie serii SIMCom, a nie na opisach sprzedawców.
+
+### Kupujemy: LilyGO T-A7670**E** R2, wersja **z GPS (L76K)**
+
+To jest wariant D z 3.5, doprecyzowany. Jedna płytka daje ESP32-WROVER-E, modem,
+GNSS, slot SIM, PMU i złącza antenowe.
+
+### Dlaczego E, a nie G ani SA
+
+Pasma z przeglądu SIMCom „A7670 Series Overview v2020.02", tabela porównawcza:
+
+| Wariant | LTE-FDD | GSM | Werdykt |
+|---|---|---|---|
+| A7670C | B1/B3/B5/B8 | 900/1800 | **nie**, brak B7 i B20 |
+| **A7670E** | **B1/B3/B5/B7/B8/B20** | 900/1800 | **to bierzemy** |
+| A7670SA | B1/B2/B3/B4/B5/B7/B8/B28/B66 | 850/900/1800/1900 | nie, Ameryka Płd. i Australia |
+
+Rozstrzyga **B20**, czyli LTE 800 MHz. To jest pasmo, na którym stoi zasięg poza
+miastem, a auto ma jeździć w trasę (Z5). A7670C i A7670SA go nie mają.
+
+**A7670G w tym przeglądzie nie występuje.** Nie znalazłem dla niego pierwotnego
+źródła z listą pasm, więc mimo że sprzedawcy opisują go jako „global", kupowanie
+go byłoby zgadywaniem. `[DO WERYFIKACJI, gdyby ktoś chciał wariant G: lista pasm
+z dokumentu SIMCom, nie z opisu oferty.]`
+
+Wszystkie trzy warianty mają GSM/GPRS/EDGE, czyli **fallback 2G jest**. Dla
+trackera to nie jest luksus: LTE Cat-1 bez 2G w martwej strefie po prostu milczy.
+
+### Pułapka, przez którą łatwo kupić płytkę bez GPS
+
+**Seria A7670 nie ma GNSS.** W przeglądzie SIMCom nie ma wiersza GNSS ani GPS;
+jest `LBS`, czyli lokalizacja z masztów, a to nie jest pozycja. Potwierdza to
+nasz własny firmware: środowisko `lilygo_a7670` w `platformio.ini` ma
+`-DMODEM_HAS_GNSS=0`.
+
+GPS na tych płytkach pochodzi z **osobnego układu L76K** i LilyGO sprzedaje ten
+sam model w dwóch wersjach, z nim i bez niego. Oferta „T-A7670E R2" bez dopisku
+o GPS to płytka bez GPS.
+
+**Przy zamawianiu wybrać wariant z L76K i sprawdzić to na zdjęciu płytki.**
+
+Efekt uboczny, i to dobry: L76K jest wielosystemowy (GPS, GLONASS, BeiDou),
+podczas gdy NEO-6M jest wyłącznie GPS L1. To znaczy, że **ta zakupka rozwiązuje
+otwarte pytanie z `00-poc.md` punkt 0.6** o to, czy NEO-6M gubi fix w mieście.
+Nie trzeba już najpierw udowadniać, że jest za słaby: NEO-6M zostaje jako
+redundancja i punkt odniesienia w pomiarach.
+
+### Czego ta płytka nie załatwia
+
+- **Budżetu prądowego.** To jest płytka rozwojowa z układem USB-serial i PMU.
+  `[DO ZMIERZENIA po zakupie: pobór w deep sleep, docs/04 punkt 4.2.]` Deklaracje
+  producenta dotyczą modemu, nie całej płytki.
+- **Ładowarki ogniwa.** Płytka ma uchwyt 18650 i ładowarkę. W aucie stojącym latem
+  na słońcu ogniwo litowo-jonowe to ryzyko, którego nie chcemy. **Nie wkładać
+  ogniwa**, zasilanie idzie z toru z `04` punkt 4.3.
+- **Anten.** Potrzebne dwie: LTE i GNSS, obie na podszybie, nie w kokpicie
+  (pozycje 10 i 11 w BOM z 3.7). Część ofert dokłada je w zestawie, część nie.
+- **Karty SIM.** Osobna decyzja, nie ruszana w tym punkcie.
+
+Firmware jest gotowy: `pio run -e lilygo_a7670`, a blok pinów
+`BOARD_LILYGO_TA7670` jest w `include/pins.h` z adnotacją, że LilyGO zmienia
+mapowanie między rewizjami i trzeba je potwierdzić na konkretnej sztuce.
+
 ## 3.8 BOM fazy 2 (odczyt CAN)
 
 Dokupka wyłącznie do rozdziału 06. Wchodzi dopiero po zamknięciu PoC i po
@@ -246,6 +312,8 @@ firmware. Brak zasilania nie zależy od niczego.
 ## Źródła
 
 - [Waveshare SIM7670G LTE Cat-1/GNSS HAT wiki](https://www.waveshare.com/wiki/SIM7670G_LTE_Cat-1/GNSS_HAT)
+- [SIMCom A7670 Series Overview v2020.02, tabela pasm](https://make.net.za/wp-content/datasheets/SIMCom%20A7670%20Series%20Overview%20v2020.02.pdf)
+- [LilyGO T-A7670G/E/SA R2, oferta producenta z wyborem wersji GPS](https://www.aliexpress.com/item/1005003036514769.html)
 - [SN65HVD230/231/232, karta katalogowa TI SLOS346O](https://www.ti.com/lit/ds/symlink/sn65hvd230.pdf)
 - [TJA1051, karta katalogowa NXP rev. 9](https://www.nxp.com/docs/en/data-sheet/TJA1051.pdf)
 - [Waveshare SN65HVD230 CAN Board, schemat](https://files.waveshare.com/upload/c/c5/SN65HVD230-CAN-Board-Schematic.pdf)
