@@ -10,6 +10,7 @@
 
 #include "config.h"
 #include "modem/transport.h"
+#include "settings/settings.h"
 
 namespace transport {
 namespace {
@@ -29,15 +30,27 @@ void raw(char* topic, uint8_t* payload, unsigned int len) {
 }  // namespace
 
 bool begin() {
+  const settings::Settings& cfg = settings::get();
   strncpy(link.net, "WIFI", sizeof(link.net) - 1);
-  WiFi.mode(WIFI_STA);
+  // The portal owns the WiFi join; this transport only opens the socket.
   net.setClient(&tcp, true);
-  net.setCACert(MQTT_ROOT_CA);
+
+  // Certificate from the portal if one was uploaded, otherwise the compiled-in
+  // default. Verification can be turned off deliberately for a bench broker.
+  static String ca;
+  ca = settings::caCert();
+  if (!cfg.mqtt_verify_ca) {
+    net.setInsecure();
+  } else if (ca.length() > 100) {
+    net.setCACert(ca.c_str());
+  } else {
+    net.setCACert(MQTT_ROOT_CA);
+  }
   // BearSSL buffers. 4 kB receive is enough for a normal certificate chain;
   // smaller only works when the broker honours max_fragment_length.
   net.setBufferSizes(4096, 1024);
-  mqtt.setServer(MQTT_HOST, MQTT_PORT);
-  mqtt.setKeepAlive(MQTT_KEEPALIVE);
+  mqtt.setServer(cfg.mqtt_host, cfg.mqtt_port);
+  mqtt.setKeepAlive(cfg.mqtt_keepalive);
   mqtt.setBufferSize(MQTT_MAX_PACKET_SIZE);
   mqtt.setCallback(raw);
   strncpy(link.imei, WiFi.macAddress().c_str(), sizeof(link.imei) - 1);
@@ -46,11 +59,12 @@ bool begin() {
 
 bool connect(const char* client_id, const char* user, const char* pass,
              const char* lwt_topic, const char* lwt_payload) {
-  if (WiFi.status() != WL_CONNECTED) {
-    WiFi.begin(WIFI_SSID, WIFI_PASS);
-    const uint32_t t0 = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - t0 < 20000) delay(200);
-    if (WiFi.status() != WL_CONNECTED) return false;
+  // The portal keeps the station associated and falls back to its own AP; this
+  // transport must not fight it for the radio, it only waits for a link.
+  if (WiFi.status() != WL_CONNECTED) return false;
+  static bool time_set = false;
+  if (!time_set) {
+    time_set = true;
     configTime(0, 0, "pool.ntp.org", "ntp.example.lan");
   }
   link.rssi = WiFi.RSSI();

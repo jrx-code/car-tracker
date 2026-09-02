@@ -9,8 +9,10 @@
 #include "gnss/gnss.h"
 #include "modem/transport.h"
 #include "pins.h"
+#include "portal/portal.h"
 #include "power/motion.h"
 #include "power/power.h"
+#include "settings/settings.h"
 #include "state.h"
 #include "telemetry/packet.h"
 #include "telemetry/store.h"
@@ -56,25 +58,29 @@ PosRecord last_pos = {};
 bool have_last_pos = false;
 
 void buildTopics() {
-  snprintf(t_status, sizeof(t_status), "cartracker/%s/status", vehicle_id);
-  snprintf(t_info, sizeof(t_info), "cartracker/%s/info", vehicle_id);
-  snprintf(t_pos, sizeof(t_pos), "cartracker/%s/pos", vehicle_id);
-  snprintf(t_tel, sizeof(t_tel), "cartracker/%s/tel", vehicle_id);
-  snprintf(t_evt, sizeof(t_evt), "cartracker/%s/evt", vehicle_id);
-  snprintf(t_batch, sizeof(t_batch), "cartracker/%s/batch", vehicle_id);
-  snprintf(t_cfg, sizeof(t_cfg), "cartracker/%s/cfg", vehicle_id);
-  snprintf(t_cmd, sizeof(t_cmd), "cartracker/%s/cmd", vehicle_id);
-  snprintf(t_ack, sizeof(t_ack), "cartracker/%s/ack", vehicle_id);
+  const char* prefix = settings::get().topic_prefix;
+  snprintf(t_status, sizeof(t_status), "%s/%s/status", prefix, vehicle_id);
+  snprintf(t_info, sizeof(t_info), "%s/%s/info", prefix, vehicle_id);
+  snprintf(t_pos, sizeof(t_pos), "%s/%s/pos", prefix, vehicle_id);
+  snprintf(t_tel, sizeof(t_tel), "%s/%s/tel", prefix, vehicle_id);
+  snprintf(t_evt, sizeof(t_evt), "%s/%s/evt", prefix, vehicle_id);
+  snprintf(t_batch, sizeof(t_batch), "%s/%s/batch", prefix, vehicle_id);
+  snprintf(t_cfg, sizeof(t_cfg), "%s/%s/cfg", prefix, vehicle_id);
+  snprintf(t_cmd, sizeof(t_cmd), "%s/%s/cmd", prefix, vehicle_id);
+  snprintf(t_ack, sizeof(t_ack), "%s/%s/ack", prefix, vehicle_id);
 }
 
 void loadNvs() {
+  // Identity lives in the settings module now, so the portal and the firmware
+  // cannot disagree about which vehicle this is.
+  strncpy(vehicle_id, settings::get().vehicle_id, sizeof(vehicle_id) - 1);
+  vehicle_id[sizeof(vehicle_id) - 1] = '\0';
+
   prefs.begin("tracker", true);
-  prefs.getString("vid", vehicle_id, sizeof(vehicle_id));
   rtc_seq = max(rtc_seq, prefs.getUInt("seq", 0));
   size_t n = prefs.getBytes("cfg", &cfg, sizeof(cfg));
   if (n != sizeof(cfg)) cfg = Config();  // struct changed, fall back to defaults
   prefs.end();
-  if (vehicle_id[0] == '\0') strncpy(vehicle_id, DEFAULT_VEHICLE_ID, sizeof(vehicle_id) - 1);
 }
 
 void saveCfg() {
@@ -117,8 +123,33 @@ void setMode(VehicleMode m, const char* event) {
 // during i-stop, the accelerometer lies when a door is slammed (docs/02 2.4).
 void updateMode(float vbat) {
   const uint32_t now = millis();
-  const bool voltage_says_running = vbat >= cfg.v_drive_on;
   const bool moving = motion::sustainedMotion(10000);
+
+  // No divider wired, so no voltage to reason about. On the bench and in the
+  // PoC the board runs off USB or a power bank, and treating the resulting
+  // near-zero reading as a flat car battery would put the tracker into
+  // hibernation within ten minutes of every power-up.
+  const bool voltage_available = vbat > 1.0f;
+  if (!voltage_available) {
+    // Fall back to movement alone: drive when the accelerometer says so, park
+    // when it has been still for two minutes.
+    if (rtc_mode == MODE_DRIVING) {
+      if (!moving) {
+        if (drive_hint_since_ms == 0) drive_hint_since_ms = now;
+        if (now - drive_hint_since_ms > 120000UL) {
+          drive_hint_since_ms = 0;
+          setMode(MODE_PARKED, "trip_end");
+        }
+      } else {
+        drive_hint_since_ms = 0;
+      }
+    } else if (moving) {
+      setMode(MODE_DRIVING, "trip_start");
+    }
+    return;
+  }
+
+  const bool voltage_says_running = vbat >= cfg.v_drive_on;
 
   if (rtc_mode == MODE_HIBERNATE) {
     if (vbat >= cfg.v_wake) setMode(MODE_PARKED, "wakeup");
@@ -271,14 +302,15 @@ void handleCommand(const uint8_t* payload, unsigned len) {
     ESP.restart();
   } else if (strcmp(cmd, "set_id") == 0) {
     const char* nid = doc["vehicle_id"] | "";
-    const bool ok = doc["confirm"].as<bool>() && strlen(nid) > 0 && strlen(nid) < 12;
+    bool ok = doc["confirm"].as<bool>() && strlen(nid) > 0 && strlen(nid) < 12;
+    String err = "refused";
     if (ok) {
-      prefs.begin("tracker", false);
-      prefs.putString("vid", nid);
-      prefs.end();
+      char body[64];
+      snprintf(body, sizeof(body), "{\"vehicle_id\":\"%s\"}", nid);
+      ok = settings::applyJson(String(body), err);
     }
-    packet::buildAck(id, ok, millis() - t0, ok ? "restart required" : "refused", buf,
-                     sizeof(buf));
+    packet::buildAck(id, ok, millis() - t0,
+                     ok ? "restart required" : err.c_str(), buf, sizeof(buf));
     transport::publish(t_ack, buf, false);
   } else if (strcmp(cmd, "ota") == 0) {
     // Deliberately not implemented over LTE: a firmware image over a metered
@@ -318,6 +350,19 @@ bool connectAndAnnounce() {
 // Parked: nothing to send except the hourly telemetry, so cut both rails and
 // sleep. This is where the current budget of docs/04 is actually earned.
 void parkedSleep() {
+  // Never sleep while somebody is using the emergency AP: the whole point of
+  // that AP is to be reachable, and a device that sleeps mid-configuration is
+  // exactly the situation it exists to prevent.
+  if (portal::apActive()) {
+    delay(200);
+    return;
+  }
+  // No voltage divider means bench or power bank. Sleeping there cuts the
+  // portal off and, on a power bank, the low draw makes the bank shut down.
+  if (power::readVbat() <= 1.0f) {
+    delay(200);
+    return;
+  }
   const uint32_t sleep_s =
       (rtc_mode == MODE_HIBERNATE) ? 6UL * 3600UL : cfg.int_park;
   transport::publish(t_status, "offline", true);
@@ -330,13 +375,43 @@ void parkedSleep() {
 
 }  // namespace
 
+// Snapshot for the portal status page. Kept here because main.cpp is the only
+// place that knows the vehicle state (docs/02 section 2.2).
+String statusJson() {
+  JsonDocument doc;
+  doc["fw"] = kFwVersion;
+  doc["mode"] = modeName(rtc_mode);
+  doc["vehicle_id"] = vehicle_id;
+  doc["mqtt"] = transport::connected();
+  doc["queued"] = store::count();
+  doc["uptime"] = millis() / 1000;
+  doc["sat"] = gnss::satellites();
+  doc["fix"] = gnss::hasFix();
+  if (gnss::hasFix()) {
+    doc["hdop"] = gnss::hdop();
+    if (have_last_pos) {
+      doc["lat"] = last_pos.lat_e7 / 1e7;
+      doc["lon"] = last_pos.lon_e7 / 1e7;
+    }
+  }
+  const float vbat = power::readVbat();
+  if (!isnan(vbat) && vbat > 1.0f) doc["vbat"] = vbat;
+  String out;
+  serializeJson(doc, out);
+  return out;
+}
+
 void setup() {
   Serial.begin(115200);
   rtc_boot_count++;
 
+  settings::begin();
   power::begin();
   loadNvs();
   buildTopics();
+
+  portal::setStatusProvider(statusJson);
+  portal::begin();
 
   store::begin();
   gnss::begin();
@@ -369,6 +444,7 @@ void setup() {
 }
 
 void loop() {
+  portal::loop();
   gnss::poll();
   transport::loop();
 
@@ -376,10 +452,17 @@ void loop() {
   updateMode(vbat);
 
   if (!transport::connected()) {
+    // A failing TLS handshake is slow and noisy; back off instead of hammering.
     static uint32_t last_retry = 0;
-    if (millis() - last_retry > 30000) {
+    static uint16_t retry_gap_s = 15;
+    if (millis() - last_retry > retry_gap_s * 1000UL) {
       last_retry = millis();
-      if (connectAndAnnounce()) flushBacklog();
+      if (connectAndAnnounce()) {
+        retry_gap_s = 15;
+        flushBacklog();
+      } else if (retry_gap_s < 240) {
+        retry_gap_s *= 2;
+      }
     }
   }
 
@@ -426,7 +509,18 @@ void loop() {
 
   // PARKED or HIBERNATE: send what is due, then sleep. Staying awake here is
   // what would blow the budget, so there is no "just for a moment" path.
-  publishTelemetry();
-  flushBacklog();
+  //
+  // The interval check is not redundant with the sleep below. On the bench and
+  // on a power bank the device does not sleep at all (no voltage sense), and
+  // without this guard the loop would republish telemetry and retry the broker
+  // every few milliseconds. That is exactly what happened the first time: the
+  // console filled with TLS retry errors at loop speed.
+  const uint32_t park_interval_ms =
+      (rtc_mode == MODE_HIBERNATE ? 6UL * 3600UL : cfg.int_park) * 1000UL;
+  if (last_tel_ms == 0 || millis() - last_tel_ms >= park_interval_ms) {
+    last_tel_ms = millis();
+    publishTelemetry();
+    flushBacklog();
+  }
   parkedSleep();
 }

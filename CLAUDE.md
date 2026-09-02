@@ -27,6 +27,12 @@ raportujący do Home Assistant przez MQTT.
 - Zmiana pakietu w `telemetry/packet.cpp` wymaga zmiany parsera w
   `ha-integration/.../coordinator.py`. Format jest w `docs/05`.
 - Nic nie jest wysyłane na magistralę CAN auta. Faza 2 jest pasywna, warunki w `docs/06`.
+- **`config.h` to ustawienia fabryczne, nie konfiguracja.** Wartości robocze są w NVS
+  i edytuje się je w portalu (`docs/13`). Nowe ustawienie dodaje się w
+  `settings.h/.cpp` i w `portal_page.h`, nie przez kolejny `#define`.
+- **Certyfikat CA bierz z łańcucha, który wysyła serwer**, nie z ogólnego roota tej
+  samej marki. Broker kotwiczy w ISRG Root YR; z X1 (cross-signer) BearSSL nie
+  zbuduje ścieżki i TLS pada. Szczegóły w `docs/13` punkt 13.5.
 - **Nigdy `pinMode()` na pinie przypisanym do UART.** `pinMode()` woła
   `perimanClearPinBus()` i odbiera pin peryferium; odbiornik milczy, a każde API
   udaje sukces. Podciągnięcie przez `gpio_set_pull_mode()`. Po `pinMode()` na takim

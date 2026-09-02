@@ -10,6 +10,7 @@
 #include "modem/transport.h"
 #include "pins.h"
 #include "power/power.h"
+#include "settings/settings.h"
 #include "util/timeutil.h"
 
 namespace transport {
@@ -77,11 +78,20 @@ int16_t csqToDbm(int16_t csq) {
 }  // namespace
 
 bool begin() {
+  const settings::Settings& cfg = settings::get();
   netClient.setClient(&tcp, true);
-  netClient.setCACert(MQTT_ROOT_CA);
+  static String ca;
+  ca = settings::caCert();
+  if (!cfg.mqtt_verify_ca) {
+    netClient.setInsecure();
+  } else if (ca.length() > 100) {
+    netClient.setCACert(ca.c_str());
+  } else {
+    netClient.setCACert(MQTT_ROOT_CA);
+  }
   netClient.setBufferSizes(4096, 1024);
-  mqtt.setServer(MQTT_HOST, MQTT_PORT);
-  mqtt.setKeepAlive(MQTT_KEEPALIVE);
+  mqtt.setServer(cfg.mqtt_host, cfg.mqtt_port);
+  mqtt.setKeepAlive(cfg.mqtt_keepalive);
   mqtt.setBufferSize(MQTT_MAX_PACKET_SIZE);
   mqtt.setCallback(raw);
   return true;
@@ -91,14 +101,15 @@ bool connect(const char* client_id, const char* user, const char* pass,
              const char* lwt_topic, const char* lwt_payload) {
   if (!powerUp()) return false;
 
-  if (strlen(GSM_SIM_PIN) > 0 && modem.getSimStatus() != 3) {
+  const settings::Settings& cfg = settings::get();
+  if (strlen(cfg.sim_pin) > 0 && modem.getSimStatus() != 3) {
     // A locked SIM after three wrong attempts means a trip to the car, so the
     // PIN is normally disabled on the card instead (docs/09 section 9.2).
-    modem.simUnlock(GSM_SIM_PIN);
+    modem.simUnlock(cfg.sim_pin);
   }
 
   if (!modem.waitForNetwork(60000L, true)) return false;
-  if (!modem.gprsConnect(GSM_APN, GSM_APN_USER, GSM_APN_PASS)) return false;
+  if (!modem.gprsConnect(cfg.apn, cfg.apn_user, cfg.apn_pass)) return false;
   if (!modem.isGprsConnected()) return false;
 
   link.rssi = csqToDbm(modem.getSignalQuality());
