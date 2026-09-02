@@ -43,12 +43,15 @@ z prawem: homologacja OBD-II wymaga, żeby magistrala diagnostyczna była na pin
 
 Wniosek roboczy: **piny 6 i 14 to HS-CAN 500 kb/s i to na nich pracujemy.**
 Piny 3 i 11 to osobna magistrala, prawdopodobnie MS-CAN 125 kb/s, i w fazie 2
-jej nie ruszamy. `[DO ZMIERZENIA na ND1 przed pierwszym podpięciem: analizatorem
-albo oscyloskopem potwierdzić, która para ma ruch i z jaką prędkością. Nie
-przyjmować tego z tabeli powyżej.]`
+jej nie ruszamy. `[DO ZMIERZENIA na ND1 przed pierwszym podpięciem: która para
+ma ruch i z jaką prędkością. Nie przyjmować tego z tabeli powyżej.]`
 
-Pomiar jest tani: sonda na 6/14, druga na 3/11, zapłon włączony, patrzeć na
-częstotliwość. Odróżnienie 500 kb/s od 125 kb/s widać gołym okiem na oscyloskopie.
+Pomiar nie wymaga oscyloskopu, tylko transceivera, którego i tak potrzebujemy.
+W trybie listen only kontroler nie wystawia na magistralę niczego nawet przy źle
+dobranej prędkości, więc procedura jest taka: 500 kb/s na 6/14, patrzeć czy lecą
+ramki bez błędów odbioru; jeśli nie, 125 kb/s; potem to samo na 3/11. Zła prędkość
+objawia się błędami u nas i ciszą na magistrali, nie odwrotnie. Oscyloskop
+przydaje się dopiero wtedy, gdy żadna kombinacja nie daje ramek.
 
 ### Tor sygnałowy
 
@@ -57,7 +60,8 @@ pin 6  (CAN H) --+
                  |   [odgalezienie, para nieprzerwana]
 pin 14 (CAN L) --+
                  |
-          [SN65HVD230 albo TJA1051T/3]  <-- Vcc przez load switch (PIN_CAN_EN)
+          [SN65HVD231, na K2 SN65HVD230]  <-- Vcc 3,3 V przez load switch (PIN_CAN_EN)
+                 |                            R_S sterowany z GPIO
                  |
           TWAI ESP32: PIN_CAN_TX 5, PIN_CAN_RX 18
 ```
@@ -65,9 +69,11 @@ pin 14 (CAN L) --+
 Zasady, każda z konkretnego powodu:
 
 - **Bez rezystora terminującego 120 Ω.** Magistrala auta jest już terminowana na obu
-  końcach. Trzeci rezystor psuje impedancję i wywala komunikację w całym aucie, nie
-  tylko u nas. Moduły SN65HVD230 z Aliexpress mają terminator wlutowany na płytce,
-  trzeba go **wylutować albo przeciąć ścieżkę**.
+  końcach. Trzeci rezystor wchodzi równolegle i zbija impedancję ze 120 na 60 Ω,
+  co psuje komunikację w całym aucie, nie tylko u nas. Gotowe moduły breakout
+  zwykle mają go na płytce, czasem z lutowanym zworem. Sprawdzić multimetrem
+  między CAN H a CAN L odłączonego modułu: ma być rozwarcie. Jeśli jest 120 Ω,
+  rozewrzeć zwór albo wylutować rezystor.
 - **Odgałęzienie, nie przerwanie pary.** Wtyk OBD daje dostęp równoległy, niczego
   nie przecinamy.
 - **Load switch na zasilaniu transceivera.** Transceiver bez zasilania jest
@@ -80,8 +86,16 @@ Zasady, każda z konkretnego powodu:
   transceiver ciągnął ją w dół przy starcie, ESP32 wejdzie w zły tryb bootowania.
   `[DO SPRAWDZENIA na stole: czy płytka wstaje z podłączonym transceiverem.]`
   Jeśli nie, przenieść TWAI TX na inny GPIO, bo TWAI daje się zmapować dowolnie.
-- **Izolacja ISO1050** jest opcją, nie wymogiem. Droższa, ale odcina nasze błędy od
-  magistrali auta. W ND3, jako w aucie nowszym i droższym, warta rozważenia.
+- **Wybór transceivera i uzasadnienie liczbami** są w `03-hardware-warianty.md`
+  punkt 3.8. W skrócie: SN65HVD231 na szynie 3,3 V, którą już mamy, ze sleepem
+  40 nA; SN65HVD230 na czas K2, bo jego standby wyłącza nadajnik sprzętowo,
+  niezależnie od firmware. TJA1051 odpada, bo chce 4,5-5,5 V, a jego silent to
+  około 1 mA, czyli dwa i pół raza cały nasz budżet na stan PARKED.
+- **Pin R_S wyprowadzony na GPIO**, nie zwarty na stałe. Na etapie K2 chcemy go
+  trzymać przy V_CC (standby), a w wersji docelowej przełączać między sleep
+  a pracą. Zwarcie do masy na stałe odbiera nam obie te możliwości.
+- **Izolacja ISO1050** jest opcją, nie wymogiem. Droższa, wymaga zasilania po
+  drugiej stronie bariery i dokłada własny pobór. W ND1 nieuzasadniona.
 
 ## 6.3 Co da się odczytać z ND1 2016
 

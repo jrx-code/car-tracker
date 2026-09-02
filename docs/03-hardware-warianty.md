@@ -140,9 +140,79 @@ Anteny są w BOM celowo osobno: umieszczenie anteny GNSS decyduje o jakości fix
 niż wybór między NEO-6M a M10. Wtyk OBD siedzi pod deską, gdzie jest metal i zero widoku
 nieba, więc antena musi wyjść na podszybie.
 
+## 3.8 BOM fazy 2 (odczyt CAN)
+
+Dokupka wyłącznie do rozdziału 06. Wchodzi dopiero po zamknięciu PoC i po
+30 dniach pracy v1 w ND1, nie wcześniej.
+
+| Poz. | Element | Ilość | Po co |
+|---|---|---|---|
+| 13 | **SN65HVD231D** (SOIC-8, marking VP231) | 2 | transceiver docelowy, tryb sleep 40 nA |
+| 14 | **SN65HVD230D** (SOIC-8, marking VP230) | 2 | transceiver na etap K2, tryb standby wyłącza nadajnik sprzętowo |
+| 15 | Przejściówka SOIC-8 na DIP albo gotowy moduł breakout | 4 | montaż na płytce stykowej na czas K1-K3 |
+| 16 | Load switch P-MOSFET (jak poz. 6) | 1 | trzeci egzemplarz, na szynę transceivera |
+| 17 | Przewód OBD-II męski na luźne żyły, wszystkie 16 pinów | 1 | dostęp do 6/14 i 3/11 bez rozbierania wtyku z poz. 1 |
+
+### Dlaczego SN65HVD231, a nie TJA1051
+
+Liczby z kart katalogowych, nie z pamięci:
+
+| | SN65HVD230 / 231 | TJA1051T/3 |
+|---|---|---|
+| Zasilanie V_CC | **3,0-3,6 V** | **4,5-5,5 V** |
+| Logika 3,3 V | natywnie | przez osobny pin V_IO (2,8-5,5 V) |
+| Tryb oszczędny | 230: standby 370 µA (nadajnik off, odbiornik **działa**) 231: sleep 40 nA (oba off) | silent 0,1-2,5 mA, typ. 1 mA (nadajnik off, odbiornik działa) |
+| Kwalifikacja motoryzacyjna | karta katalogowa jej nie deklaruje | **AEC-Q100** |
+| Prędkość | do 1 Mb/s | do 5 Mb/s (CAN FD) |
+
+Rozstrzyga zasilanie: TJA1051 potrzebuje 5 V, a w naszym torze z 4.3 nie ma szyny
+5 V i dokładanie jej tylko dla transceivera to kolejna przetwornica w budżecie
+prądowym, który i tak jest napięty. SN65HVD231 siada na szynie 3,3 V, która już
+jest, i jego tryb sleep to 40 nA, czyli **cztery rzędy wielkości mniej niż silent
+w TJA1051**. Przy budżecie 400 µA na cały stan PARKED z 4.2 milliamper na samym
+transceiverze jest nie do przyjęcia.
+
+Cena za to: karta katalogowa SN65HVD23x nie deklaruje AEC-Q100 i podaje zakres
+pracy tylko -40 do 85 °C. Pod deską rozdzielczą to wystarcza; gdyby układ miał
+iść w komorę silnika, wybór byłby inny.
+
+**Dwa typy, nie jeden**, bo mają różne tryby oszczędne i oba są nam potrzebne
+w innym momencie:
+
+- **SN65HVD230 na etap K2.** Pin R_S podciągnięty do V_CC włącza standby: nadajnik
+  jest wyłączony sprzętowo, odbiornik pracuje dalej. To jest listen only wymuszone
+  rezystorem, niezależne od tego, czy firmware poprawnie ustawił tryb TWAI. Przy
+  pierwszym podpięciu do cudzej magistrali to jest dokładnie ta gwarancja, której
+  chcemy, i kosztuje 370 µA, których na etapie zrzutów nikt nie liczy.
+- **SN65HVD231 do wersji docelowej.** Ten sam pin R_S przy V_CC usypia i nadajnik,
+  i odbiornik, przy 40 nA. Na postoju to jest zero w naszym bilansie.
+
+Oba są w SOIC-8 z tym samym wyprowadzeniem, więc zamiana to wylutowanie jednego
+i wlutowanie drugiego, bez zmian w płytce.
+
+Load switch z pozycji 16 zostaje mimo trybu sleep. 40 nA to wartość typowa, nie
+maksymalna, a poza tym sleep zależy od poprawnego stanu pinu R_S, czyli od
+firmware. Brak zasilania nie zależy od niczego.
+
+### Czego NIE trzeba kupować
+
+- **Oscyloskopu ani analizatora stanów logicznych do K1.** Ustalenie, która para
+  pinów ma magistralę 500 kb/s, robi się transceiverem, który i tak kupujemy:
+  w trybie listen only kontroler nie wystawia na magistralę nic, nawet przy źle
+  dobranej prędkości, więc wystarczy spróbować 500 kb/s na 6/14 i zobaczyć, czy
+  lecą ramki bez błędów. Zła prędkość daje błędy odbioru u nas i ciszę na wodzie.
+- **Rezystora terminującego 120 Ω.** Wręcz przeciwnie, patrz 06 punkt 6.2.
+- **Izolowanego ISO1050.** Droższy, wymaga osobnego zasilania po drugiej stronie
+  bariery i dokłada własny pobór. Do ND1 nieuzasadniony.
+- **Gotowego interfejsu OBD (ELM327, adapterów BT/WiFi).** Nie pasuje do
+  architektury: te układy są zaprojektowane do odpytywania, a my chcemy nasłuchu,
+  i nie da się ich odciąć od magistrali na czas postoju.
+
 ## Źródła
 
 - [Waveshare SIM7670G LTE Cat-1/GNSS HAT wiki](https://www.waveshare.com/wiki/SIM7670G_LTE_Cat-1/GNSS_HAT)
+- [SN65HVD230/231/232, karta katalogowa TI SLOS346O](https://www.ti.com/lit/ds/symlink/sn65hvd230.pdf)
+- [TJA1051, karta katalogowa NXP rev. 9](https://www.nxp.com/docs/en/data-sheet/TJA1051.pdf)
 - [SIM7670G 4G LTE Cat 1 Module User Manual](https://manuals.plus/ae/1005006673400672)
 - [SIMCom: nowa generacja modułów LPWA SIM7070G/SIM7080G](https://www.simcom.com/news_view-38.html)
 - [Ineltek: SIM7070G/SIM7080G, różnice w obsłudze 2G/E-GPRS](https://www.ineltek.com/en/lpwa-new-product-simcom-launches-its-new-generation-lpwa-module-solution-sim7070g-sim7080g/)
