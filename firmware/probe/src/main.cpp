@@ -44,8 +44,14 @@ constexpr const char* MDNS_NAME = "gps-probe";
 // pulling them at boot prevents startup), 1/3 (the USB console), 6-11 (SPI
 // flash). 34-39 are input only and have no internal pull-up, so they float and
 // are reported separately.
-constexpr int SCAN_PINS[] = {26, 16, 17, 25, 27, 32, 33, 4,  5,
-                             13, 14, 18, 19, 21, 22, 23, 35, 34, 36, 39};
+constexpr int SCAN_PINS[] = {26, 27, 16, 17, 25, 32, 33, 4,  5,
+                             13, 14, 18, 21, 22, 23, 35, 34, 36, 39};
+// The UART TX has to be parked somewhere while sweeping, and it must be a pin
+// that is never scanned: uartSetPins() only detaches TX when the new txPin is
+// >= 0, so passing -1 leaves the old TX attached. Scanning a pin that is still
+// driven as TX reads as silence no matter what the module sends, which is
+// exactly how GPIO27 was missed on the first sweep.
+constexpr int PARK_TX_PIN = 19;
 constexpr size_t SCAN_PIN_COUNT = sizeof(SCAN_PINS) / sizeof(SCAN_PINS[0]);
 constexpr uint32_t PIN_DWELL_MS = 900;
 
@@ -161,7 +167,7 @@ void scanPins() {
 
   for (size_t i = 0; i < SCAN_PIN_COUNT; i++) {
     const int pin = SCAN_PINS[i];
-    gpsSerial.setPins(pin, -1);
+    gpsSerial.setPins(pin, PARK_TX_PIN);
     if (pin < 34) pinMode(pin, INPUT_PULLUP);  // 34+ have no internal pull-up
     delay(60);
     while (gpsSerial.available()) gpsSerial.read();
