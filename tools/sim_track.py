@@ -36,9 +36,14 @@ START_LAT, START_LON = 52.000000, 21.000000
 
 
 def build_client(args: argparse.Namespace, lwt_topic: str) -> mqtt.Client:
-    client = mqtt.Client(
-        mqtt.CallbackAPIVersion.VERSION2, client_id=f"sim-{args.vehicle}"
-    )
+    # paho 2.x wants an explicit callback API version, 1.x does not know the
+    # argument at all. Workstations still ship 1.6, so support both.
+    if hasattr(mqtt, "CallbackAPIVersion"):
+        client = mqtt.Client(
+            mqtt.CallbackAPIVersion.VERSION2, client_id=f"sim-{args.vehicle}"
+        )
+    else:
+        client = mqtt.Client(client_id=f"sim-{args.vehicle}")
     password = args.password or os.environ.get("MQTT_PASS")
     if not password:
         sys.exit("set --password or MQTT_PASS (menedzer hasel, never hardcode)")
@@ -109,16 +114,27 @@ def run_trip(client: mqtt.Client, base: str, args: argparse.Namespace) -> None:
     lat, lon = START_LAT, START_LON
     course = 45
     seq = 1
+    # Simulated clock, separate from the wall clock. With --fast the points are
+    # sent every 0.2 s but each one still advances `interval` seconds of
+    # simulated time; otherwise the distance between consecutive points implies
+    # a few thousand km/h and any sane consumer drops them as GNSS glitches.
+    sim_ts = time.time() - args.points * args.interval
+
     client.publish(f"{base}/evt", json.dumps(
-        {"seq": seq, "ts": int(time.time()), "ev": "trip_start", "lat": lat, "lon": lon}
+        {"seq": seq, "ts": int(sim_ts), "ev": "trip_start", "lat": lat, "lon": lon}
     ), qos=1)
 
     for step in range(args.points):
         seq += 1
+        sim_ts += args.interval
         speed = 50 + 20 * math.sin(step / 4)
         course = (course + (15 if step % 7 == 0 else 0)) % 360
         lat, lon = move(lat, lon, course, speed * 1000 / 3600 * args.interval)
-        client.publish(f"{base}/pos", pos_payload(seq, lat, lon, speed, course, "driving"), qos=1)
+        client.publish(
+            f"{base}/pos",
+            pos_payload(seq, lat, lon, speed, course, "driving", ts=sim_ts),
+            qos=1,
+        )
         print(f"pos {seq}: {lat:.5f},{lon:.5f} {speed:.0f} km/h crs {course}")
         if step % 2 == 0:
             seq += 1
@@ -127,7 +143,7 @@ def run_trip(client: mqtt.Client, base: str, args: argparse.Namespace) -> None:
 
     seq += 1
     client.publish(f"{base}/evt", json.dumps(
-        {"seq": seq, "ts": int(time.time()), "ev": "trip_end", "lat": lat, "lon": lon}
+        {"seq": seq, "ts": int(sim_ts), "ev": "trip_end", "lat": lat, "lon": lon}
     ), qos=1)
     print("trip finished")
 
@@ -150,10 +166,16 @@ def run_alarm(client: mqtt.Client, base: str, args: argparse.Namespace) -> None:
     client.publish(f"{base}/evt", json.dumps(
         {"seq": seq, "ts": int(time.time()), "ev": "motion_alarm", "lat": lat, "lon": lon}
     ), qos=1)
+    sim_ts = time.time() - args.points * 15
     for step in range(args.points):
         seq += 1
+        sim_ts += 15
         lat, lon = move(lat, lon, 180, 8)
-        client.publish(f"{base}/pos", pos_payload(seq, lat, lon, 3.0, 180, "moved"), qos=1)
+        client.publish(
+            f"{base}/pos",
+            pos_payload(seq, lat, lon, 3.0, 180, "moved", ts=sim_ts),
+            qos=1,
+        )
         print(f"alarm pos {seq}: {lat:.5f},{lon:.5f}")
         time.sleep(1 if args.fast else args.interval)
 
