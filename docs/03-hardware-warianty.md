@@ -200,34 +200,40 @@ otwarte pytanie z `00-poc.md` punkt 0.6** o to, czy NEO-6M gubi fix w mieście.
 Nie trzeba już najpierw udowadniać, że jest za słaby: NEO-6M zostaje jako
 redundancja i punkt odniesienia w pomiarach.
 
-### Dwa konkretne zakupy, oba sprawdzone pod kątem GNSS
+### Gdzie kupić: LilyGO T-A7670E R2 With GPS, wariant Q334
 
-**Opcja 1, z polskiego sklepu, GNSS w modemie:**
-[Waveshare ESP32-S3-A7670E-4G-EN, Kamami 1190055](https://kamami.pl/esp32/1190055-esp32-s3-a7670e-4g-development-board-lte-cat-1-2g-wifi-bluetooth-telephone-call-sms-gns-5906623486816.html),
-193,69 zł, na stanie. Wykaz elementów producenta wymienia wprost **A7670E-FASE**
-i osobne **złącze anteny GNSS (IPEX 1)**, a antena ceramiczna GNSS jest w zestawie.
+Producent sprzedaje sześć wersji tej samej płytki i tylko jedna jest właściwa.
+Lista wariantów zaciągnięta ze sklepu LilyGO:
 
-- Za: GNSS siedzi w modemie, więc jeden UART mniej i ścieżka `MODEM_HAS_GNSS=1`
-  zamiast osobnego odbiornika. Faktura, brak cła, dostawa krajowa.
-- Przeciw: to **ESP32-S3**, a nie klasyczny ESP32, na który celuje `board =
-  esp32dev`. Potrzebne nowe środowisko w `platformio.ini` i mapa pinów.
-  Do tego kamera, głośnik, wejście panelu słonecznego i ładowarka ogniwa,
-  czyli sporo rzeczy, których nie chcemy w budżecie prądowym.
+| Wariant | USD | Uwaga |
+|---|---|---|
+| **T-A7670E R2 With GPS [Q334]** | **32,89** | **ten** |
+| T-A7670E R2 Without GPS [Q195] | 29,98 | bez GPS |
+| T-A7670G R2 With GPS [Q425] | 34,57 | pasma niepotwierdzone |
+| T-A7670SA R2 With GPS [Q335] | 33,88 | pasma Ameryki Płd. |
 
-**Opcja 2, klasyczny ESP32, GNSS z osobnego układu:**
-[LilyGO T-A7670E R2 With GPS, wariant Q334](https://www.lilygo.cc/products/t-sim-a7670e),
-32,89 USD u producenta, na stanie. To ten sam SKU, którego zdjęcie jest
-w repozytorium LilyGO jako `Q334-T-A7670E-ESP32`.
+**Sklep: [OpenELAB](https://openelab.io/products/lilygo-t-a7670e-r2-wireless-module),
+wersja „with GPS", 44,95 € plus 7,95 € wysyłki, czyli 52,90 € pod drzwi.**
 
-- Za: ESP32-WROVER-E, czyli nasze obecne środowisko `lilygo_a7670` bez zmian.
-  Mniej zbędnych układów na płytce.
-- Przeciw: GNSS z L76K na osobnym UART. Wysyłka z Chin, doliczyć czas i cło.
-  W UE ten sam model bywa u pośredników drożej, na przykład
-  [OpenELAB, 44,95 EUR](https://openelab.io/products/lilygo-t-a7670e-r2-wireless-module).
+Uzasadnienie jest logistyczne, nie techniczne, bo płytka jest ta sama:
 
-Uwaga na oferty europejskie z wariantem **G**, na przykład
-[botnroll Q425](https://www.botnroll.com/en/esp32/5053-t-a7670g-r2-sim-4g-lte-cat1-gsm-gprs-with-gps-l76k-esp32-wrover-e-18650-battery-holder-lilygo-q425.html):
-mają GPS, ale to wariant pasmowy, dla którego nie ma potwierdzonej listy pasm.
+- Magazyn w Monachium albo w Shenzhen, ale **dla krajów UE OpenELAB pokrywa cło
+  i podatki w formule DDP**, niezależnie od tego, skąd faktycznie wyjdzie paczka.
+  Żadnej dopłaty przy odbiorze.
+- FedEx Regional Economy, 3-5 dni roboczych. Powyżej 100 € wysyłka gratis.
+- Sklep [samego LilyGO](https://www.lilygo.cc/products/t-sim-a7670e) jest tańszy
+  w cenie katalogowej (32,89 USD), ale **seria A7670 nie leży w ich magazynie
+  niemieckim** (sprawdzone: 18 pozycji, żadnej A767x), więc paczka idzie z Chin.
+  Ich regulamin mówi wprost, że odprawę celną i opłaty ponosi kupujący, więc do
+  ceny dochodzi polski VAT 23 procent od wartości z transportem i opłata
+  manipulacyjna kuriera. Czas dostawy 5-25 dni roboczych zależnie od metody.
+
+`[NIESPRAWDZONE: oficjalny sklep LilyGO na AliExpress bywa obsługiwany
+z magazynu w UE z podatkiem w cenie. Strony AliExpress nie dały się odczytać
+programowo, więc jeśli komuś zależy na cenie, warto tam zajrzeć ręcznie.]`
+
+Odrzucone: oferta Waveshare ESP32-S3-A7670E-4G z polskiego sklepu (decyzja
+zakupowa użytkownika, 2026-09-02) oraz warianty G i SA z powodów pasmowych.
 
 ### Czego ta płytka nie załatwia
 
