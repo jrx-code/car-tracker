@@ -13,13 +13,15 @@ namespace packet {
 size_t buildPos(const PosRecord& rec, char* out, size_t out_len, bool compact);
 
 size_t buildTel(const Telemetry& tel, VehicleMode mode, uint32_t seq,
-                uint32_t ts, char* out, size_t out_len);
+                uint32_t ts, const char* ip, char* out, size_t out_len);
 
 size_t buildEvent(const char* ev, uint32_t seq, uint32_t ts, const PosRecord* pos,
                   char* out, size_t out_len);
 
+// `ip` lets the aggregator reach the device's own portal; without it the hub
+// would have to guess an address that comes from DHCP.
 size_t buildInfo(const transport::LinkInfo& link, const char* fw_version,
-                 const char* modem_name, char* out, size_t out_len);
+                 const char* modem_name, const char* ip, char* out, size_t out_len);
 
 size_t buildBatch(const PosRecord* recs, uint16_t n, char* out, size_t out_len,
                   bool compact);

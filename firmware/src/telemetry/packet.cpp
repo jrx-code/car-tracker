@@ -51,7 +51,7 @@ size_t buildPos(const PosRecord& rec, char* out, size_t out_len, bool compact) {
 }
 
 size_t buildTel(const Telemetry& tel, VehicleMode mode, uint32_t seq, uint32_t ts,
-                char* out, size_t out_len) {
+                const char* ip, char* out, size_t out_len) {
   JsonDocument doc;
   doc["seq"] = seq;
   doc["ts"] = ts;
@@ -66,6 +66,8 @@ size_t buildTel(const Telemetry& tel, VehicleMode mode, uint32_t seq, uint32_t t
   doc["q"] = tel.queued;
   doc["rst"] = tel.reset_reason;
   doc["st"] = modeName(mode);
+  // Refreshed with every telemetry packet: a DHCP lease can move the device.
+  if (ip && ip[0] && strcmp(ip, "0.0.0.0") != 0) doc["ip"] = ip;
   return serializeJson(doc, out, out_len);
 }
 
@@ -83,13 +85,14 @@ size_t buildEvent(const char* ev, uint32_t seq, uint32_t ts, const PosRecord* po
 }
 
 size_t buildInfo(const transport::LinkInfo& link, const char* fw_version,
-                 const char* modem_name, char* out, size_t out_len) {
+                 const char* modem_name, const char* ip, char* out, size_t out_len) {
   JsonDocument doc;
   doc["fw"] = fw_version;
   doc["modem"] = modem_name;
   doc["imei"] = link.imei;
   doc["iccid"] = link.iccid;
   doc["net"] = link.net;
+  if (ip && ip[0]) doc["ip"] = ip;
   return serializeJson(doc, out, out_len);
 }
 

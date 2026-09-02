@@ -316,6 +316,9 @@ line-height:1.45}
 
 <script>
 const $=id=>document.getElementById(id);
+// Relative API paths on purpose: served straight from the device the page sits
+// at /, and behind the aggregator's proxy it sits at /device/<id>/. Absolute
+// paths would hit the aggregator's own API instead of the device's.
 let adminOn=false, dirty=false;
 
 async function api(p,o){const r=await fetch(p,o);const t=await r.text();
@@ -404,7 +407,7 @@ function cell(k,v){return '<div><div class="k">'+k+'</div><div class="v">'+v+'</
 
 async function loadStatus(){
   try{
-    const s=await api('/api/status');
+    const s=await api('api/status');
     $('vname').textContent=s.vehicle_name?('— '+s.vehicle_name):'';
     const net=$('p_net');
     net.textContent=s.ap?('AP: '+s.ap_ssid):(s.sta?('WiFi '+s.rssi+' dBm'):'offline');
@@ -430,7 +433,7 @@ async function loadStatus(){
 }
 
 async function loadSettings(){
-  const s=await api('/api/settings');
+  const s=await api('api/settings');
   for(const k in s){
     const el=$(k);if(!el)continue;
     if(el.type==='checkbox')el.checked=!!s[k];else el.value=s[k];
@@ -495,7 +498,7 @@ $('save').onclick=async()=>{
   if(!$('auth').value){msg('Wpisz haslo administratora w pasku na dole.',false);return}
   const btn=$('save');btn.disabled=true;
   try{
-    await api('/api/settings',{method:'POST',headers:authHeaders(),
+    await api('api/settings',{method:'POST',headers:authHeaders(),
       body:JSON.stringify(collect())});
     msg('Zapisane. Zmiany pinow, sieci, brokera i certyfikatu dzialaja po restarcie.',true);
     await loadSettings();
@@ -513,13 +516,13 @@ $('save_ca').onclick=async()=>{
     box.textContent='To nie wyglada na certyfikat PEM (brak linii BEGIN/END CERTIFICATE)';
     return}
   $('ca').classList.remove('err');
-  try{await api('/api/ca',{method:'POST',headers:authHeaders(),body:pem});
+  try{await api('api/ca',{method:'POST',headers:authHeaders(),body:pem});
     msg('Certyfikat zapisany.',true);$('ca').value='';await loadSettings();
   }catch(e){msg('Odrzucone: '+e.message,false)}
 };
 $('del_ca').onclick=async()=>{
   if(!confirm('Usunac zapisany certyfikat CA? Bez niego weryfikacja brokera przestanie dzialac.'))return;
-  try{await api('/api/action',{method:'POST',headers:authHeaders(),
+  try{await api('api/action',{method:'POST',headers:authHeaders(),
       body:JSON.stringify({action:'delete_ca'})});
     msg('Certyfikat usuniety.',true);await loadSettings();
   }catch(e){msg('Odrzucone: '+e.message,false)}
@@ -528,7 +531,7 @@ $('del_ca').onclick=async()=>{
 $('scan').onclick=async()=>{
   $('scan_out').textContent='skanowanie...';
   try{
-    const r=await api('/api/scan');
+    const r=await api('api/scan');
     const dl=$('ssids');dl.innerHTML='';
     r.networks.sort((a,b)=>b.rssi-a.rssi).forEach(n=>{
       const o=document.createElement('option');o.value=n.ssid;
@@ -541,7 +544,7 @@ async function action(name,confirmText,okText){
   if(confirmText&&!confirm(confirmText))return;
   if(!$('auth').value){msg('Wpisz haslo administratora w pasku na dole.',false);
     $('bar').classList.add('on');return}
-  try{await api('/api/action',{method:'POST',headers:authHeaders(),
+  try{await api('api/action',{method:'POST',headers:authHeaders(),
       body:JSON.stringify({action:name})});
     msg(okText||('Wykonane: '+name),true);
   }catch(e){msg('Odrzucone: '+e.message,false)}

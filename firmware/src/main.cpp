@@ -263,7 +263,8 @@ void publishTelemetry() {
   tel.queued = store::count();
   tel.reset_reason = power::resetReason();
 
-  const size_t n = packet::buildTel(tel, rtc_mode, ++rtc_seq, nowTs(), buf, sizeof(buf));
+  const size_t n = packet::buildTel(tel, rtc_mode, ++rtc_seq, nowTs(),
+                                    portal::ipAddress().c_str(), buf, sizeof(buf));
   if (n) transport::publish(t_tel, buf, false);
   saveSeq();
 }
@@ -339,8 +340,8 @@ bool connectAndAnnounce() {
     return false;
   }
   transport::publish(t_status, "online", true);
-  const size_t n = packet::buildInfo(transport::info(), kFwVersion, kModemName, buf,
-                                     sizeof(buf));
+  const size_t n = packet::buildInfo(transport::info(), kFwVersion, kModemName,
+                                     portal::ipAddress().c_str(), buf, sizeof(buf));
   if (n) transport::publish(t_info, buf, true);
   transport::subscribe(t_cfg);
   transport::subscribe(t_cmd);
