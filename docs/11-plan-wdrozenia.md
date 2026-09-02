@@ -3,6 +3,14 @@
 Kolejność jest tak dobrana, żeby najdroższe pomyłki (rozładowany akumulator, uszkodzona
 magistrala, spalona wiązka) były niemożliwe do popełnienia na wczesnym etapie.
 
+## Faza PoC: posiadany sprzęt, zero zakupów
+
+Pełny opis w `docs/00-poc.md`. W skrócie: ESP32 WiFi + NEO-6M, transport przez WiFi
+(hotspot telefonu w aucie), zasilanie z USB. PoC ma odpowiedzieć na pytanie, czy
+pomysł działa end to end i czy NEO-6M wystarcza, **zanim cokolwiek kupimy**.
+Kroki B1-B5 poniżej są równocześnie krokami PoC, bo używają tego samego środowiska
+`wifi_dev`. Różnica jest taka, że PoC wychodzi z nimi do auta, a nie kończy na stole.
+
 ## Faza 0: bench na WiFi (bez zakupów)
 
 | Krok | Co | Kryterium zamknięcia |
@@ -29,9 +37,13 @@ Bez zamkniętych W1-W3 nie wpinamy urządzenia na stałe.
 
 ## Faza 2: zakup i budowa
 
+**Warunek wejścia: zamknięty PoC wg kryteriów z `docs/00-poc.md` punkt 0.6.**
+Wynik PoC zmienia listę zakupów: jeżeli NEO-6M gubi fix w mieście, kupujemy też
+odbiornik wielosystemowy, a nie sam modem.
+
 | Krok | Co |
 |---|---|
-| Z1 | Decyzja o wariancie z rozdziału 03 na podstawie sprawdzonej dostępności LTE-M u operatora i ceny |
+| Z1 | Decyzja o wariancie z rozdziału 03 na podstawie wyniku PoC, sprawdzonej dostępności LTE-M u operatora i ceny |
 | Z2 | Zakup modemu, przetwornicy, elementów ochronnych, wtyku OBD, anten |
 | Z3 | Montaż toru zasilania **bez modemu i bez GNSS**, pomiar poboru samego ESP32 w deep sleep na zasilaczu laboratoryjnym 12,6 V |
 | Z4 | Kryterium: poniżej 2 mA. Jeżeli nie, wracamy do 4.2 i eliminujemy źródło, nie idziemy dalej |

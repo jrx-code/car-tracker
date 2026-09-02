@@ -5,7 +5,7 @@ raportujący do Home Assistant przez MQTT.
 
 ## Struktura
 
-- `docs/` — założenia (01), architektura (02), warianty sprzętu (03), zasilanie (04),
+- `docs/` — PoC na posiadanym sprzęcie (00), założenia (01), architektura (02), warianty sprzętu (03), zasilanie (04),
   protokół MQTT (05), CAN jako faza 2 (06), firmware (07), integracja HA (08),
   bezpieczeństwo (09), różnice między autami (10), plan wdrożenia (11)
 - `firmware/` — PlatformIO, ESP32, 5 środowisk (wifi_dev + 4 warianty modemu)
@@ -14,6 +14,9 @@ raportujący do Home Assistant przez MQTT.
 
 ## Zasady w tym repo
 
+- **PoC budujemy wyłącznie z posiadanego sprzętu: ESP32 WiFi + NEO-6M, transport przez
+  WiFi (`pio run -e wifi_dev`), zasilanie z USB, nie z OBD.** Nic nie kupujemy przed
+  zamknięciem PoC wg kryteriów z `docs/00-poc.md`. Nie proponować zakupów wcześniej.
 - Dokumentacja po polsku, kod i commity po angielsku.
 - `firmware/src/config.h` jest w `.gitignore`. Sekrety z menedzer hasel, nigdy w repo.
 - **Wszystko, czego nie zmierzono na aucie, jest oznaczone `[DO ZMIERZENIA]`.**
@@ -33,5 +36,6 @@ ruff check ha-integration/custom_components/car_tracker tools/
 
 ## Stan
 
-Faza 0 (projekt i firmware bench). Sprzęt LTE nie kupiony, nic nie zamontowane
-w aucie. Kolejny krok to kroki W1-W3 z `docs/11-plan-wdrozenia.md`: pomiary na autach.
+Faza PoC na posiadanym sprzęcie. Sprzęt LTE nie kupiony, nic nie zamontowane w aucie.
+Kolejny krok: uruchomić PoC wg `docs/00-poc.md`, równolegle kroki W1-W3
+z `docs/11-plan-wdrozenia.md` (pomiary na autach, bez montażu).
