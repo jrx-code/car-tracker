@@ -12,16 +12,34 @@ Identyfikator jest w NVS, nie w kompilacji, zgodnie z założeniem Z6.
 |---|---|---|---|---|
 | `cartracker/<id>/status` | urządzenie -> HA | 1 | tak | `online` / `offline`. `offline` jest ustawione jako LWT brokera |
 | `cartracker/<id>/info` | urządzenie -> HA | 1 | tak | dane stałe: tożsamość pojazdu, wersja firmware, model modemu, IMEI, ICCID, MAC, adres panelu (5.9) |
-| `cartracker/<id>/pos` | urządzenie -> HA | 1 | nie | pojedyncza pozycja |
-| `cartracker/<id>/tel` | urządzenie -> HA | 1 | nie | telemetria bez pozycji (napięcie, zasięg, temperatura) |
+| `cartracker/<id>/pos` | urządzenie -> HA | 1 | **tak** | pojedyncza pozycja |
+| `cartracker/<id>/tel` | urządzenie -> HA | 1 | **tak** | telemetria bez pozycji (napięcie, zasięg, temperatura) |
 | `cartracker/<id>/evt` | urządzenie -> HA | 1 | nie | zdarzenia: start jazdy, koniec jazdy, alarm ruchu, hibernacja |
 | `cartracker/<id>/batch` | urządzenie -> HA | 1 | nie | paczka zaległych pozycji z kolejki offline |
-| `cartracker/<id>/cfg` | HA -> urządzenie | 1 | tak | konfiguracja: interwały, progi napięcia, tryb |
-| `cartracker/<id>/cmd` | HA -> urządzenie | 1 | nie | komendy jednorazowe: `ping`, `locate`, `reboot`, `ota` |
+| `cartracker/<id>/cfg` | hub -> urządzenie | 1 | tak | konfiguracja: interwały, progi napięcia, tryb |
+| `cartracker/<id>/cmd` | HA i hub -> urządzenie | 1 | nie | komendy jednorazowe: `ping`, `locate`, `reboot`, `ota` |
+| `cartracker/<id>/trip` | hub -> HA | 1 | tak | bieżący lub ostatni przejazd: dystans, czas, prędkości (5.10) |
+| `homeassistant/…/config` | hub -> HA | 1 | tak | MQTT discovery, 21 encji na pojazd (patrz `08` punkt 8.3) |
 | `cartracker/<id>/ack` | urządzenie -> HA | 1 | nie | potwierdzenie komendy i wyniku |
 
 `cfg` jest retained celowo: urządzenie po restarcie w garażu bez zasięgu i tak dostanie
 ostatnią konfigurację przy pierwszym połączeniu, bez czekania na HA.
+
+`pos` i `tel` są retained od 2026-09-02. Powód: auto stojące przez sześć tygodni
+publikuje pozycję w najlepszym razie raz na godzinę, a bez retained restart Home
+Assistanta zostawia mapę pustą aż do następnego pakietu. Cena jest taka, że przy
+każdym połączeniu broker odtwarza ostatnią pozycję i telemetrię, więc **odbiorca
+musi rozpoznać powtórkę**:
+
+- deduplikacja po `seq` załatwia zapis do bazy,
+- przejazdu nie wolno otwierać z pozycji z ustawioną flagą retained, bo dostawałby
+  jednopróbkowy przejazd przy każdym restarcie odbiornika,
+- wiersza telemetrii nie wolno wstawiać drugi raz, ale podsumowanie pojazdu
+  (napięcie, zasięg) trzeba z niej odświeżyć, żeby strona floty nie była pusta.
+
+`evt` i `batch` zostają nieretained i to też jest celowe: retained `motion_alarm`
+odtwarzałby alarm przy każdym połączeniu, a retained `batch` dosyłałby zaległości
+w kółko.
 
 ## 5.2 Pozycja (`pos`)
 
@@ -194,3 +212,23 @@ Bez niego hub musiałby zgadywać adres przydzielony z DHCP.
 Agregator nadpisuje tylko te pola, które w wiadomości faktycznie są. Starsze
 firmware, które nie zna `plate` ani `vin`, nie wyczyści wartości zgłoszonej
 wcześniej przez nowsze.
+
+## 5.10 Przejazd (`trip`)
+
+```json
+{
+  "distance_km": 71.14,
+  "duration_s": 30400,
+  "max_speed": 48.0,
+  "avg_speed": 46.8,
+  "open": true
+}
+```
+
+Publikowane przez agregatora, nie przez urządzenie: to są dane wyliczone, a nie
+zmierzone. Retained, bo „ile przejechało ostatnim razem" jest sensownym pytaniem
+także po restarcie Home Assistanta.
+
+To jedyny temat, od którego zależą encje HA, a którego nie publikuje samo
+urządzenie. Gdy agregator stanie, cztery sensory przejazdu się zestarzeją,
+a cała reszta encji działa dalej, bo czyta tematy urządzenia.

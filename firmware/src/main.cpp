@@ -226,7 +226,12 @@ bool courseChangedEnough(const PosRecord& rec) {
 void sendOrQueue(const PosRecord& rec) {
   const size_t n = packet::buildPos(rec, buf, sizeof(buf), false);
   if (!n) return;
-  if (transport::connected() && transport::publish(t_pos, buf, false)) return;
+  // Retained. A car parked for six weeks publishes a position once an hour at
+  // best, so without this a restarted Home Assistant shows no location at all
+  // until the next one arrives. The consumers know a replay when they see one:
+  // the aggregator dedupes on seq and refuses to open a trip from a retained
+  // packet (tracker-hub ingest.py).
+  if (transport::connected() && transport::publish(t_pos, buf, true)) return;
   store::push(rec);  // no link: keep it, the backlog is flushed later
 }
 
@@ -265,7 +270,10 @@ void publishTelemetry() {
 
   const size_t n = packet::buildTel(tel, rtc_mode, ++rtc_seq, nowTs(),
                                     portal::ipAddress().c_str(), buf, sizeof(buf));
-  if (n) transport::publish(t_tel, buf, false);
+  // Retained for the same reason as the position: battery voltage on a car
+  // that is asleep is the whole point of this device, and it must survive a
+  // restart on the receiving end.
+  if (n) transport::publish(t_tel, buf, true);
   saveSeq();
 }
 
