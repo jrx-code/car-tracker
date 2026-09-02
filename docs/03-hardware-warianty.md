@@ -171,24 +171,63 @@ z dokumentu SIMCom, nie z opisu oferty.]`
 Wszystkie trzy warianty mają GSM/GPRS/EDGE, czyli **fallback 2G jest**. Dla
 trackera to nie jest luksus: LTE Cat-1 bez 2G w martwej strefie po prostu milczy.
 
-### Pułapka, przez którą łatwo kupić płytkę bez GPS
+### Pułapka: o GNSS decyduje sufiks, nie nazwa
 
-**Seria A7670 nie ma GNSS.** W przeglądzie SIMCom nie ma wiersza GNSS ani GPS;
-jest `LBS`, czyli lokalizacja z masztów, a to nie jest pozycja. Potwierdza to
-nasz własny firmware: środowisko `lilygo_a7670` w `platformio.ini` ma
-`-DMODEM_HAS_GNSS=0`.
+Przegląd SIMCom nie ma wiersza GNSS ani GPS, jest tylko `LBS`, czyli lokalizacja
+z masztów, a to nie jest pozycja. Ale ten dokument **nie rozbija sufiksów
+modułu**, a to one rozstrzygają:
 
-GPS na tych płytkach pochodzi z **osobnego układu L76K** i LilyGO sprzedaje ten
-sam model w dwóch wersjach, z nim i bez niego. Oferta „T-A7670E R2" bez dopisku
-o GPS to płytka bez GPS.
+| Oznaczenie | GNSS |
+|---|---|
+| A7670E-**LASE** | **nie** |
+| A7670E-**FASE** | **tak**, GPS, GLONASS, BeiDou w module |
 
-**Przy zamawianiu wybrać wariant z L76K i sprawdzić to na zdjęciu płytki.**
+Czyli „A7670E" w tytule oferty nie mówi nic o GPS. Sprzedawcy, którzy wiedzą, co
+sprzedają, podają pełne oznaczenie; ci, którzy nie podają, mogą mieć jedno albo
+drugie. `platformio.ini` ma to zapisane od początku przy wariancie `a7670e`:
+`MODEM_HAS_GNSS` zostaje 0, dopóki pełne oznaczenie nie zostanie potwierdzone.
+
+Drugi wariant tego samego problemu: na płytkach LilyGO T-A7670x GNSS nie pochodzi
+z modemu, tylko z **osobnego układu L76K**, i ten sam model jest sprzedawany
+w dwóch wersjach, z nim i bez. Oferta bez wyraźnego „With GPS" to płytka bez GPS.
+
+**Przy zamawianiu wymagać albo pełnego oznaczenia z sufiksem FASE, albo wyraźnej
+wersji „with GPS", i sprawdzić złącze anteny GNSS na zdjęciu płytki.**
 
 Efekt uboczny, i to dobry: L76K jest wielosystemowy (GPS, GLONASS, BeiDou),
 podczas gdy NEO-6M jest wyłącznie GPS L1. To znaczy, że **ta zakupka rozwiązuje
 otwarte pytanie z `00-poc.md` punkt 0.6** o to, czy NEO-6M gubi fix w mieście.
 Nie trzeba już najpierw udowadniać, że jest za słaby: NEO-6M zostaje jako
 redundancja i punkt odniesienia w pomiarach.
+
+### Dwa konkretne zakupy, oba sprawdzone pod kątem GNSS
+
+**Opcja 1, z polskiego sklepu, GNSS w modemie:**
+[Waveshare ESP32-S3-A7670E-4G-EN, Kamami 1190055](https://kamami.pl/esp32/1190055-esp32-s3-a7670e-4g-development-board-lte-cat-1-2g-wifi-bluetooth-telephone-call-sms-gns-5906623486816.html),
+193,69 zł, na stanie. Wykaz elementów producenta wymienia wprost **A7670E-FASE**
+i osobne **złącze anteny GNSS (IPEX 1)**, a antena ceramiczna GNSS jest w zestawie.
+
+- Za: GNSS siedzi w modemie, więc jeden UART mniej i ścieżka `MODEM_HAS_GNSS=1`
+  zamiast osobnego odbiornika. Faktura, brak cła, dostawa krajowa.
+- Przeciw: to **ESP32-S3**, a nie klasyczny ESP32, na który celuje `board =
+  esp32dev`. Potrzebne nowe środowisko w `platformio.ini` i mapa pinów.
+  Do tego kamera, głośnik, wejście panelu słonecznego i ładowarka ogniwa,
+  czyli sporo rzeczy, których nie chcemy w budżecie prądowym.
+
+**Opcja 2, klasyczny ESP32, GNSS z osobnego układu:**
+[LilyGO T-A7670E R2 With GPS, wariant Q334](https://www.lilygo.cc/products/t-sim-a7670e),
+32,89 USD u producenta, na stanie. To ten sam SKU, którego zdjęcie jest
+w repozytorium LilyGO jako `Q334-T-A7670E-ESP32`.
+
+- Za: ESP32-WROVER-E, czyli nasze obecne środowisko `lilygo_a7670` bez zmian.
+  Mniej zbędnych układów na płytce.
+- Przeciw: GNSS z L76K na osobnym UART. Wysyłka z Chin, doliczyć czas i cło.
+  W UE ten sam model bywa u pośredników drożej, na przykład
+  [OpenELAB, 44,95 EUR](https://openelab.io/products/lilygo-t-a7670e-r2-wireless-module).
+
+Uwaga na oferty europejskie z wariantem **G**, na przykład
+[botnroll Q425](https://www.botnroll.com/en/esp32/5053-t-a7670g-r2-sim-4g-lte-cat1-gsm-gprs-with-gps-l76k-esp32-wrover-e-18650-battery-holder-lilygo-q425.html):
+mają GPS, ale to wariant pasmowy, dla którego nie ma potwierdzonej listy pasm.
 
 ### Czego ta płytka nie załatwia
 
