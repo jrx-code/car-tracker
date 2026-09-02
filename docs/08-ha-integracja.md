@@ -35,19 +35,97 @@ Jedno urządzenie na pojazd, encje z `has_entity_name`.
 | Niskie napięcie | binary_sensor battery | próg 12,2 V |
 | Hibernacja, roaming | binary_sensor, diagnostyka | |
 
-## 8.3 Dlaczego to jest integracja, a nie MQTT discovery
+## 8.3 MQTT discovery czy własna integracja
 
-Discovery dałoby encje bez pisania kodu, ale nie dałoby czterech rzeczy, które
-w tym projekcie są istotne:
+Pierwsza wersja tego punktu miała cztery powody, dla których to jest integracja,
+a nie discovery: deduplikacja po `seq`, filtr niemożliwych skoków, przejazdy
+i konfiguracja z UI. **Trzy z tych czterech przejął `tracker-hub`**, który
+powstał później, jest wdrożony i chodzi. Punkt trzeba więc przeliczyć od nowa,
+bo uzasadnienie z niego wyparowało po cichu.
 
-1. **Deduplikacja po `seq`.** Dosyłka zaległości z definicji generuje duplikaty
-   (rekord znika z kolejki dopiero po PUBACK). Discovery nie ma gdzie tego liczyć.
-2. **Filtr niemożliwych skoków.** Pozycja, która wymagałaby prędkości ponad
-   300 km/h, jest odrzucana jako błąd GNSS zamiast lądować na mapie.
-3. **Przejazdy.** Dystans i statystyki liczone z pozycji, żeby firmware został
-   głupi i stabilny (docs/02 punkt 2.8).
-4. **Konfiguracja urządzenia z UI.** Opcje integracji publikują retained `cfg`,
-   więc progi napięcia poprawia się w HA po pomiarach na aucie, bez kabla.
+### Kto co dzisiaj robi
+
+| Zadanie | firmware | tracker-hub | integracja HA |
+|---|---|---|---|
+| Deduplikacja po `seq` | nie | tak, unikalny indeks `(vehicle_id, seq)` | tak, `seen_seq` |
+| Odrzucanie HDOP > 5,0 | tak | tak | tak |
+| Filtr skoku ponad 300 km/h | nie | tak | tak |
+| Przejazdy: dystans, maks., średnia | nie | tak, tabela `trips` | tak, `Trip` |
+| Historia | kolejka offline | SQLite, retencja 180 dni | recorder |
+| Konfiguracja urządzenia | NVS | `POST /api/vehicles/<id>/config` | opcje integracji |
+
+Progi są dziś zgodne: 300 km/h i HDOP 5,0 po obu stronach. To nie jest zasługa
+mechanizmu, tylko tego, że jedno przepisano z drugiego, i nic nie pilnuje, żeby
+tak zostało.
+
+Gorsze jest to, że **format wiadomości ma dziś trzy implementacje**:
+`packet.cpp` pisze, `ingest.py` czyta, `coordinator.py` czyta drugi raz. Każda
+ma własną kopię mapy skróconych kluczy. `CLAUDE.md` przypomina o dwóch z nich.
+
+### Co discovery potrafi, a czego nie
+
+Potrafi wszystko z tabeli 8.2: `sensor`, `binary_sensor`, `device_tracker`,
+grupowanie w jedno urządzenie, kategorie diagnostyczne, dostępność z LWT.
+Do komend `button` z `command_topic`, do progów napięcia `number`. Te ostatnie
+działają, bo `applyConfig` w firmware scala klucze zamiast zastępować całość,
+a `saveCfg()` odkłada wynik do NVS, więc publikacja pojedynczego klucza nie gubi
+pozostałych.
+
+Nie potrafi jednej rzeczy: **pamiętać poprzedniej wiadomości**. Szablon jest
+bezstanowy, więc deduplikacja, filtr teleportu i naliczanie dystansu są poza
+jego zasięgiem. Cała różnica sprowadza się do tego jednego zdania.
+
+### Gdzie ma mieszkać stan
+
+Skoro logika stanowa musi gdzieś być, to pytanie brzmi gdzie, a nie czy.
+
+- **W firmware**: odpada, `02` punkt 2.8 mówi wprost, że urządzenie ma zostać
+  głupie i stabilne.
+- **W integracji HA**: tam jest dzisiaj, ale to drugi egzemplarz tego samego.
+- **W hubie**: tam też jest, i to jest egzemplarz, który realnie działa, ma bazę
+  i jest źródłem prawdy dla `tracker.example.lan`.
+
+### Rekomendacja: discovery publikowane przez huba, w dwóch klasach tematów
+
+Hub publikuje **same konfiguracje discovery**, retained, raz. Stan encji bierze
+się z dwóch różnych miejsc, i to jest sedno propozycji:
+
+| Klasa | `state_topic` | Co się dzieje, gdy hub padnie |
+|---|---|---|
+| Bezpośrednie: pozycja, napięcie, satelity, HDOP, RSSI, kolejka, tryb, dostępność | temat **urządzenia**, np. `cartracker/nd1/tel` | encje żyją dalej, bo hub nie jest w tej ścieżce |
+| Pochodne: dystans przejazdu, czas, prędkość maksymalna | temat **huba**, np. `cartracker/nd1/trip` | te encje się zestarzeją, reszta nie |
+
+Konfiguracje są retained, więc encje przeżywają restart huba, a nawet jego
+całkowitą śmierć. Niezależność, o którą chodziło w README, zostaje zachowana
+dokładnie tam, gdzie ma znaczenie: napięcie akumulatora i alarm ruchu idą
+z urządzenia prosto do HA i nie przechodzą przez nic po drodze.
+
+Co z tego wynika:
+
+- Znika trzeci parser formatu i drugi egzemplarz logiki pochodnej.
+- Znika 999 linii Pythona w `/config/custom_components/`, których nikt nie
+  aktualizuje przy każdej zmianie HA.
+- Nowy tracker pojawia się w HA sam, bez dodawania wpisu integracji.
+
+Czego nie ma za darmo:
+
+- Hub musi umieć publikować discovery i temat `trip`. To jest nowy kod w hubie,
+  tylko w jednym miejscu zamiast w dwóch.
+- Encje pochodne zależą od huba. Uznajemy to za akceptowalne, bo dystans
+  przejazdu nikogo nie budzi w nocy, a napięcie akumulatora tak i ono nie zależy.
+- Nazwy encji ustala discovery, nie my. Przy migracji trzeba przejrzeć
+  automatyzacje, choć dziś nie ma żadnej, bo integracja nigdy nie została wdrożona.
+
+### Czego ta analiza nie rozstrzyga
+
+Nie sprawdziłem, czy któraś encja z tabeli 8.2 wymaga czegoś, czego discovery
+nie wystawia; sprawdzone są typy, nie każde pole każdej encji. Przed usunięciem
+integracji trzeba przejść tabelę 8.2 wiersz po wierszu na VM103
+(`198.51.100.10:8123`), a nie na prodzie.
+
+**Decyzja jest odłożona.** Integracja zostaje w repo do czasu, aż discovery
+z huba pokaże komplet encji na maszynie testowej. Dopiero wtedy ma sens
+cokolwiek kasować.
 
 ## 8.4 Odporność na złe dane
 
