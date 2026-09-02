@@ -155,10 +155,49 @@ Zimny start NEO-6M pod otwartym niebem to około 27 s, w gorszych warunkach
 kilka minut. Dioda na module zaczyna mrugać dopiero po złapaniu fixa, więc
 brak mrugania przez pierwszą minutę nie jest jeszcze objawem awarii.
 
-## 12.7 Co dalej
+## 12.8 Dlaczego przez kilka godzin nie było ani jednego bajtu
 
-Po podłączeniu: strona `http://gps-probe.local/` albo `pio device monitor`
-w `firmware/probe`, i zapisanie wyników
-(liczba satelitów, HDOP, czas do pierwszego fixa) do `hardware/pomiary.md`.
-Te liczby są wejściem do decyzji, czy NEO-6M zostaje, czy w wersji docelowej
-potrzebny jest odbiornik wielosystemowy (docs/03 punkt 3.1).
+Winny był firmware, nie sprzęt. `pinMode(PIN_GNSS_RX, INPUT_PULLUP)`, dodany po to,
+żeby niepodłączone wejście nie łapało szumu, **odbierał pin UART-owi**: w Arduino
+ESP32 core `pinMode()` woła `perimanClearPinBus()` i przypisuje pin do zwykłego GPIO.
+
+Objaw jest podstępny, bo nic nie zgłasza błędu. `begin()` zwraca sukces,
+`digitalRead()` na tym pinie czyta poprawne poziomy, a `available()` po prostu
+nigdy nie zwraca danych. Stąd zero bajtów niezależnie od modułu, prędkości i pinu,
+i stąd skan 20 pinów meldujący ciszę wszędzie.
+
+Kolejność, która to rozstrzygnęła, warta zapamiętania jako schemat:
+
+1. **Macierz połączeń GPIO** na czystym `digitalRead`, bez UART: każdy pin po kolei
+   ściągany do masy, reszta czytana. Wynik: GPIO26 i GPIO27 faktycznie zwarte
+   zworką. To wykluczyło pomyłkę w pinach i uszkodzenie płytki.
+2. **Test aktywności nadajnika**: wysyłka na GPIO27 przy jednoczesnym próbkowaniu
+   GPIO26 przez `digitalRead`. Wynik: 3839 zboczy. Nadajnik rusza linią, więc wina
+   leży po stronie odbioru.
+3. **Kod źródłowy core**: `pinMode` -> `perimanClearPinBus` wyjaśnia głuchy odbiornik
+   przy zdrowo wyglądającym API.
+
+Naprawa: `attachGnssUart()` robi `end()` + `begin()` i ustawia podciągnięcie przez
+`gpio_set_pull_mode()`, które dotyka wyłącznie rezystorów i nie rusza routingu
+peryferium. Dwie zasady na przyszłość:
+
+- Nigdy `pinMode()` na pinie przypisanym do UART. Podciągnięcie: `gpio_set_pull_mode()`.
+- Po `pinMode()` na pinie peryferium konieczny jest pełny `end()` + `begin()`.
+  Samo `setPins()` nie wystarczy, bo `uartSetPins()` odłącza TX tylko gdy nowy
+  `txPin >= 0`, a przy niezmienionych pinach nie robi ponownego przypisania.
+
+Osobna, mniejsza pułapka z tej samej serii: `setPins(pin, -1)` w skanerze pinów
+zostawiał stary TX podpięty, więc skanowany pin bywał jednocześnie wyjściem i
+czytał się jako cisza. TX parkuje teraz na GPIO19, wyłączonym ze skanu.
+
+## 12.9 Pierwszy fix
+
+Wyniki i warunki: `hardware/pomiary.md`. W skrócie: fix po 151 s w budynku,
+6 satelitów, HDOP 1,6, 696 poprawnych ramek NMEA i jedna błędna, 9600 baud.
+Jedna błędna suma kontrolna na 697 ramek oznacza, że połączenie UART jest czyste.
+
+## 12.10 Co dalej
+
+Bench zamknięty: moduł działa, ślad danych od anteny po stronę HTTP jest
+zweryfikowany. Następny krok to wyniesienie zestawu na zewnątrz i do auta,
+czyli kroki z `docs/00-poc.md` punkt 0.6, oraz pomiary W1-W3 z `docs/11`.

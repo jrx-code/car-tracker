@@ -27,6 +27,11 @@ raportujący do Home Assistant przez MQTT.
 - Zmiana pakietu w `telemetry/packet.cpp` wymaga zmiany parsera w
   `ha-integration/.../coordinator.py`. Format jest w `docs/05`.
 - Nic nie jest wysyłane na magistralę CAN auta. Faza 2 jest pasywna, warunki w `docs/06`.
+- **Nigdy `pinMode()` na pinie przypisanym do UART.** `pinMode()` woła
+  `perimanClearPinBus()` i odbiera pin peryferium; odbiornik milczy, a każde API
+  udaje sukces. Podciągnięcie przez `gpio_set_pull_mode()`. Po `pinMode()` na takim
+  pinie konieczny pełny `end()` + `begin()`, samo `setPins()` nie wystarczy.
+  Kosztowało to kilka godzin 2026-09-02, opis w `docs/12-bring-up.md` punkt 12.8.
 - **Nie wołać `HardwareSerial::end()` żeby zmienić prędkość UART.** W Arduino core 3.3.9
   `end()` odpina piny i usuwa sterownik; cykliczne begin/end na UART1 zalewa konsolę USB
   powtarzającym się tekstem (1,8 MB w 20 s, zdiagnozowane 2026-09-02). Od zmiany prędkości
@@ -43,7 +48,12 @@ ruff check ha-integration/custom_components/car_tracker tools/
 
 ## Stan
 
-Faza PoC na posiadanym sprzęcie. Płytka rozpoznana i opisana w `docs/12-bring-up.md`:
-ESP32-D0WD-V3, 4 MB flash, CP2102, `/dev/ttyUSB0`. Probe GPS wgrany i zweryfikowany
-bez modułu. Kolejny krok: podłączyć NEO-6M wg `docs/12-bring-up.md` punkt 12.5
-i zapisać pierwsze pomiary do `hardware/pomiary.md`.
+Faza PoC. **Bench działa**: NEO-6M ma fix (6 satelitów, HDOP 1,6, TTFF 151 s
+w budynku), dane lecą przez WiFi na `http://gps-probe.local/`. Liczby w
+`hardware/pomiary.md`, przebieg w `docs/12-bring-up.md`.
+
+Agregator floty stoi osobno: `tracker-hub`, LXC 420, https://tracker.example.lan
+(repo `z4-server/serwisy/tracker-hub`).
+
+Kolejny krok: wynieść zestaw na zewnątrz i do auta (`docs/00-poc.md` 0.6),
+równolegle pomiary W1-W3 z `docs/11` (pobór spoczynkowy aut, napięcie na pinie 16).
