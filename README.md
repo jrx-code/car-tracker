@@ -14,6 +14,13 @@ facelift), reporting to Home Assistant over MQTT.
 The repository holds the whole thing: assumptions, hardware trade-offs, the power
 design, ESP32 firmware, the MQTT contract, and the Home Assistant side.
 
+![Data flow](docs/images/architecture.svg)
+
+The aggregator publishes the *discovery configs* that create the Home Assistant
+entities, but the state of most of them is read straight from the device's own
+topics. A stopped aggregator therefore costs only the trip sensors; battery
+voltage and the tow alarm never pass through it.
+
 ## What works today
 
 - **GNSS on the bench.** NEO-6M, 3D fix, HDOP 1.6 with 6 satellites indoors,
@@ -23,8 +30,19 @@ design, ESP32 firmware, the MQTT contract, and the Home Assistant side.
 - **On-device configuration portal.** Vehicle identity, WiFi, an emergency access
   point, MQTT with a pasted CA, LTE, every hardware pin, OTA. Settings live in
   NVS, so `config.h` is only a factory default.
+
+  ![Device portal](docs/images/portal.png)
+
+  *Status bar served by the ESP32 itself. Registration, position and address are
+  redacted in this screenshot.*
 - **Offline queue.** Positions taken without a link are stored and flushed later,
   deduplicated by sequence number at the receiving end.
+![Fleet page](docs/images/fleet.png)
+
+*Fleet overview. Map thumbnails are blurred and coordinates replaced in this
+screenshot; the `0.00 V` on the first vehicle is real, because a bench board has
+no voltage divider fitted.*
+
 - **Home Assistant entities via MQTT discovery**, 21 per vehicle: position,
   battery voltage, mode, satellites, HDOP, signal, queue depth, trip statistics,
   a tow alarm, and buttons for locate and ping. Verified end to end: pressing the

@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 215" width="880" height="215"
+     role="img" aria-label="Przeplyw danych: urzadzenie, broker MQTT, agregator, Home Assistant">
+<style>
+  .bx{fill:none;stroke:#8a95a3;stroke-width:1.5}
+  .lb{font:500 13px "IBM Plex Sans",Helvetica,Arial,sans-serif;fill:#2b313a}
+  .sm{font:400 11px "IBM Plex Mono",ui-monospace,monospace;fill:#6b7482}
+  .ar{stroke:#8a95a3;stroke-width:1.4;fill:none;marker-end:url(#a)}
+  .hi{stroke:#b07316;stroke-width:1.8;fill:none;marker-end:url(#b)}
+  .ac{fill:#b07316}
+  @media (prefers-color-scheme:dark){
+    .lb{fill:#e2e6eb} .sm{fill:#9aa3af} .bx,.ar{stroke:#79838f}
+    .hi{stroke:#e0a54c} .ac{fill:#e0a54c}
+  }
+</style>
+<defs>
+  <marker id="a" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+    <path d="M0 0 L8 4 L0 8 z" fill="#8a95a3"/></marker>
+  <marker id="b" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+    <path d="M0 0 L8 4 L0 8 z" fill="#b07316"/></marker>
+</defs>
+<rect class="bx" x="6" y="54" width="152" height="64" rx="5"/>
+<text class="lb" x="82" y="80" text-anchor="middle">ESP32 w aucie</text>
+<text class="sm" x="82" y="98" text-anchor="middle">GNSS + LTE</text>
+<rect class="bx" x="242" y="54" width="132" height="64" rx="5"/>
+<text class="lb" x="308" y="80" text-anchor="middle">broker MQTT</text>
+<text class="sm" x="308" y="98" text-anchor="middle">TLS</text>
+<rect class="bx" x="458" y="10" width="176" height="64" rx="5"/>
+<text class="lb" x="546" y="36" text-anchor="middle">agregator</text>
+<text class="sm" x="546" y="54" text-anchor="middle">SQLite, mapa floty</text>
+<rect class="bx" x="458" y="122" width="176" height="64" rx="5"/>
+<text class="lb" x="546" y="148" text-anchor="middle">Home Assistant</text>
+<text class="sm" x="546" y="166" text-anchor="middle">21 encji na auto</text>
+<path class="ar" d="M162 86 H236"/>
+<path class="ar" d="M378 80 C416 80 422 42 452 42"/>
+<path class="ar" d="M378 92 C416 92 422 154 452 154"/>
+<path class="hi" d="M634 42 C674 42 678 122 712 122"/>
+<text class="sm ac" x="724" y="114">discovery</text>
+<text class="sm ac" x="724" y="130">(konfiguracje)</text>
+<text class="sm" x="199" y="78" text-anchor="middle">pos</text>
+<text class="sm" x="199" y="108" text-anchor="middle">tel</text>
+<text class="sm" x="424" y="126" text-anchor="middle">stan encji</text>
+</svg>
