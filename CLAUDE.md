@@ -20,7 +20,8 @@ raportujący do Home Assistant przez MQTT.
 - **PoC budujemy wyłącznie z posiadanego sprzętu: ESP32 WiFi + NEO-6M, transport przez
   WiFi (`pio run -e wifi_dev`), zasilanie z USB, nie z OBD.** Nic nie kupujemy przed
   zamknięciem PoC wg kryteriów z `docs/00-poc.md`. Nie proponować zakupów wcześniej.
-- Dokumentacja po polsku, kod i commity po angielsku.
+- Dokumentacja po polsku, kod i commity po angielsku. **README po angielsku**,
+  bo repo jest publiczne na GitHubie (`jrx-code/car-tracker`).
 - `firmware/src/config.h` jest w `.gitignore`. Sekrety z menedżera haseł, nigdy w repo.
 - **Wszystko, czego nie zmierzono na aucie, jest oznaczone `[DO ZMIERZENIA]`.**
   Nie zamieniać takich znaczników na twierdzenia bez pomiaru.
