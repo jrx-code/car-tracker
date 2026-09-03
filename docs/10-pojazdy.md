@@ -2,10 +2,9 @@
 
 Firmware jest jeden (Z6). Różnice siedzą w konfiguracji NVS i w profilu w HA.
 
-**Od 2026-09-02 planowane są trzy auta**, nie dwa: kupione trzy sztuki
-LilyGO T-A7670E R2 with GPS. Trzeci pojazd nie jest jeszcze opisany, bo nie
-zapadła decyzja, które to auto. `[DO USTALENIA: marka, rocznik, identyfikator
-pojazdu, czy sezonowe czy codzienne.]`
+**Od 2026-09-02 są trzy auta**, nie dwa: kupione trzy sztuki
+LilyGO T-A7670E R2 with GPS. Trzecie to Mazda MX-5 **NBFL**, rejestracja
+[rejestracja], opisana w 10.3.
 
 Nic w kodzie nie zakłada dwóch. Sprawdzone: `vehicle_id`, użytkownik i hasło
 MQTT są ustawieniami NVS edytowanymi w portalu (`13`), a nie `#define`;
@@ -47,19 +46,69 @@ przez społeczność. To wystarczy, żeby eksperymentować najpierw tam. Gdyby j
 gwarancja realnie obowiązywała, dochodzi drugi argument i wtedy trzeba go zapisać
 tutaj z konkretną datą końca, a nie z domysłu.
 
-## 10.3 Konfiguracja per auto
+## 10.3 MX-5 NBFL, [rejestracja]
+
+Proponowany `vehicle_id`: **`nbfl`**, w tej samej konwencji co `nd1` i `nd3`.
+
+| Cecha | Wpływ na projekt |
+|---|---|
+| Rocznik z przełomu wieków, elektronika sprzed CAN | **Faza 2 z rozdziału 06 tego auta nie dotyczy.** Szczegóły niżej |
+| Najstarszy akumulator w stawce | Progi jak w ND1 albo wyżej, `[DO USTALENIA: czy auto stoi sezonowo]` |
+| Brak i-stop i prostszy alternator | Detekcja jazdy z napięcia powinna być czystsza niż w ND3 |
+| Najstarsza instalacja | `[DO ZMIERZENIA: czy pin 16 jest stale zasilany i czy nie gaśnie, W3]` |
+
+### Dlaczego CAN tu prawdopodobnie nie zadziała
+
+Rozdział 06 opisuje magistralę CAN i transceiver SN65HVD230. To dotyczy ND1
+i ND3. NBFL jest starszy niż obowiązek CAN w OBD-II.
+
+Co wiadomo na pewno: EOBD jest obowiązkowe w UE dla nowych aut benzynowych od
+1 stycznia 2001, więc gniazdo J1962 w tym aucie jest. Ale CAN po OBD
+(ISO 15765-4) stał się obowiązkowy dopiero dla roczników mniej więcej od 2008.
+Wcześniej normą było ISO 9141-2 albo ISO 14230-4 (KWP2000) na linii K, pin 7,
+10,4 kb/s.
+
+`[NIESPRAWDZONE u źródła: nie znalazłem dokumentu producenta ani serwisowego,
+który wprost podaje protokół dla MX-5 NB. Nie przyjmować tego z tego akapitu.]`
+
+**Rozstrzyga się to bez narzędzi, patrząc w gniazdo:**
+
+| Co jest obsadzone | Protokół |
+|---|---|
+| piny 6 i 14 | CAN, plan z 06 działa bez zmian |
+| pin 7 (i czasem 15) | linia K, plan z 06 **nie działa** |
+
+### Co z tego wynika, jeżeli to linia K
+
+Różnica jest głębsza niż inny układ scalony. **Na linii K nie ma czego
+nasłuchiwać.** ISO 9141 i KWP2000 to protokoły pytanie-odpowiedź; sterownik nie
+rozgłasza niczego z siebie. Cała konstrukcja z 06, oparta na pasywnym nasłuchu
+ramek rozgłaszanych cyklicznie, w tym aucie nie ma zastosowania.
+
+Zostaje wyłącznie odpytywanie, a odpytywanie przy zgaszonym silniku jest
+dokładnie tym, czego 06 punkt 6.4 zabrania. Czyli w NBFL dane z auta są możliwe
+**tylko przy pracującym silniku i tylko na żądanie**, albo wcale.
+
+Sprzętowo linia K to nie jest ten sam świat co CAN: jedna żyła, poziomy 12 V,
+potrzebny układ typu L9637D albo równoważny, nie transceiver CAN.
+
+**Decyzja na teraz: w NBFL montujemy v1, czyli GPS, napięcie i alarm ruchu.**
+Dane z auta są osobnym tematem, do otwarcia dopiero po sprawdzeniu gniazda
+i po zamknięciu fazy 2 na ND1.
+
+## 10.4 Konfiguracja per auto
 
 Wartości poza domyślnymi, wysyłane retained na `cartracker/<id>/cfg`:
 
-| Klucz | ND1 | ND3 | Uzasadnienie |
-|---|---|---|---|
-| `int_park` | 3600 | 1800 | ND1 ma być cichy, ND3 bardziej responsywny |
-| `v_hib` | 12.0 | 11.9 | starszy akumulator, wcześniejsze odcięcie |
-| `v_warn` | 12.4 | 12.2 | wcześniejsze ostrzeżenie na aucie sezonowym |
-| `int_alarm` | 15 | 15 | alarm ruchu jednakowo pilny w obu |
-| `gnss_src` | `auto` | `auto` | porównanie NEO-6M i GNSS modemu w obu autach |
+| Klucz | ND1 | ND3 | NBFL | Uzasadnienie |
+|---|---|---|---|---|
+| `int_park` | 3600 | 1800 | `[?]` | ND1 ma być cichy, ND3 bardziej responsywny; NBFL zależy od tego, czy stoi sezonowo |
+| `v_hib` | 12.0 | 11.9 | 12.0 | starszy akumulator, wcześniejsze odcięcie |
+| `v_warn` | 12.4 | 12.2 | 12.4 | wcześniejsze ostrzeżenie na aucie sezonowym |
+| `int_alarm` | 15 | 15 | 15 | alarm ruchu jednakowo pilny wszędzie |
+| `gnss_src` | `auto` | `auto` | `auto` | porównanie NEO-6M i GNSS modemu |
 
-## 10.4 Dołożenie kolejnego pojazdu
+## 10.5 Dołożenie kolejnego pojazdu
 
 Lista jest tu, bo dotąd ta wiedza była rozsypana po pięciu rozdziałach.
 
@@ -77,7 +126,7 @@ Kroki, których **nie ma** na tej liście, bo dzieją się same: encje w HA (hub
 ogłasza nowy pojazd, gdy tylko przyjdzie od niego `info` albo `tel`), wiersz na
 stronie floty, baza w agregatorze.
 
-## 10.5 Czego nie zakładamy
+## 10.6 Czego nie zakładamy
 
 Nie zakładamy, że auta mają identyczne gniazdo OBD, identyczne zachowanie pinu 16
 ani identyczny profil napięcia z alternatora. Każdy z tych punktów jest w planie wdrożenia

@@ -6,6 +6,14 @@ podpięcie, co realnie da się wyciągnąć z ND1 2016, i podział pracy na siln
 pracujący i zgaszony, bo to jest jedyna rzecz, która decyduje o tym, czy urządzenie
 rozładuje akumulator.
 
+### Czego ten rozdział nie dotyczy
+
+**Tylko ND1 i ND3.** Trzeci pojazd, MX-5 NBFL, jest starszy niż obowiązek CAN
+w OBD-II i najprawdopodobniej ma na gnieździe linię K (ISO 9141-2 albo
+KWP2000, pin 7), a nie CAN na pinach 6 i 14. Wtedy nie ma czego nasłuchiwać,
+bo to protokół pytanie-odpowiedź bez rozgłoszeń, więc cała konstrukcja z tego
+rozdziału tam nie działa. Rozstrzygnięcie i konsekwencje: `10` punkt 10.3.
+
 ### Dwie rzeczy, które trzeba rozdzielić
 
 Warunek wejścia „v1 chodzi miesiąc, drain potwierdzony" dotyczy **urządzenia
