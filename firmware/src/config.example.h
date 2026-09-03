@@ -18,7 +18,7 @@
 #define MQTT_HOST "mqtt.example.lan"
 #define MQTT_PORT 8883
 #define MQTT_USER "cartracker-nd1"   // one user per vehicle, see docs/09 section 9.2
-#define MQTT_PASS "REPLACE_ME"       // menedzer hasel: "car-tracker MQTT (nd1)"
+#define MQTT_PASS "REPLACE_ME"       // from your password manager, never in the repo
 #define MQTT_KEEPALIVE 120
 
 // --- WiFi (bench build and OTA in the garage) ------------------------------

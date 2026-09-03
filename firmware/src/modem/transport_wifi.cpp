@@ -65,7 +65,7 @@ bool connect(const char* client_id, const char* user, const char* pass,
   static bool time_set = false;
   if (!time_set) {
     time_set = true;
-    configTime(0, 0, "pool.ntp.org", "ntp.example.lan");
+    configTime(0, 0, "pool.ntp.org");
   }
   link.rssi = WiFi.RSSI();
 

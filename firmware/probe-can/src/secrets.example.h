@@ -1,5 +1,5 @@
 // Copy to secrets.h and fill in. secrets.h is gitignored.
-// Values come from the kontroler WiFi controller (WLAN list), not from memory.
+// Use the SSID of the network the board will actually join.
 #pragma once
 
 #define PROBE_WIFI_SSID "IoT-SSID"

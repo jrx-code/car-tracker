@@ -16,7 +16,7 @@ zasilanie 3V3 z płytki, transport WiFi (`IoT-SSID`).
 | Prędkość transmisji | 9600 baud (domyślna u-blox) |
 | Ramki NMEA poprawne / błędne | 696 / 1 |
 | Bajtów odebranych | 39 761 |
-| Pozycja | 52.00000, 21.00000 |
+| Pozycja | zgodna z rzeczywistą, wartość nie publikowana |
 | Sygnał WiFi ESP32 | -77 dBm |
 
 Wnioski na teraz:

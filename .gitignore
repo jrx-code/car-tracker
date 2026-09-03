@@ -1,4 +1,4 @@
-# Secrets: never commit. Values live in menedzer hasel.
+# Secrets: never commit. Values live in a password manager.
 firmware/src/config.h
 *.env
 .secrets

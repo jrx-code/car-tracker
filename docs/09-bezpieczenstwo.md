@@ -19,8 +19,8 @@ konsekwencjach przy wycieku, a nie czujnik temperatury.
 ## 9.2 Poświadczenia
 
 - Osobny użytkownik EMQX na pojazd: `cartracker-nd1`, `cartracker-nd3`.
-- Hasła generowane `openssl rand -base64 24`, przechowywane w menedzer hasel w folderze
-  Infrastructure i w kolekcji AI, zgodnie z regułą globalną.
+- Hasła generowane `openssl rand -base64 24`, przechowywane w menedżerze haseł,
+  nigdy w repo.
 - ACL w EMQX:
   - `cartracker-<id>` publikuje wyłącznie na `cartracker/<id>/#`,
     subskrybuje wyłącznie `cartracker/<id>/cfg` i `cartracker/<id>/cmd`.

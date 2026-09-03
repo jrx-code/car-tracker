@@ -3,8 +3,7 @@
 Firmware jest jeden (Z6). Różnice siedzą w konfiguracji NVS i w profilu w HA.
 
 **Od 2026-09-02 są trzy auta**, nie dwa: kupione trzy sztuki
-LilyGO T-A7670E R2 with GPS. Trzecie to Mazda MX-5 **NBFL**, rejestracja
-[rejestracja], opisana w 10.3.
+LilyGO T-A7670E R2 with GPS. Trzecie to Mazda MX-5 **NBFL**, opisana w 10.3.
 
 Nic w kodzie nie zakłada dwóch. Sprawdzone: `vehicle_id`, użytkownik i hasło
 MQTT są ustawieniami NVS edytowanymi w portalu (`13`), a nie `#define`;
@@ -46,7 +45,7 @@ przez społeczność. To wystarczy, żeby eksperymentować najpierw tam. Gdyby j
 gwarancja realnie obowiązywała, dochodzi drugi argument i wtedy trzeba go zapisać
 tutaj z konkretną datą końca, a nie z domysłu.
 
-## 10.3 MX-5 NBFL, [rejestracja]
+## 10.3 MX-5 NBFL
 
 Proponowany `vehicle_id`: **`nbfl`**, w tej samej konwencji co `nd1` i `nd3`.
 
@@ -116,7 +115,7 @@ Lista jest tu, bo dotąd ta wiedza była rozsypana po pięciu rozdziałach.
 |---|---|---|
 | 1. Nadać `vehicle_id` | portal urządzenia, sekcja Pojazd (`13`) | tworzy temat MQTT, litery, cyfry, `-` i `_` |
 | 2. Wpisać rejestrację i VIN | tam samo | idą w `info`, podpisują auto na stronie floty i w HA |
-| 3. Założyć konto MQTT `cartracker-<id>` | EMQX | jedno konto na pojazd, patrz `09` punkt 9.2. Hasło do menedzer hasel |
+| 3. Założyć konto MQTT `cartracker-<id>` | EMQX | jedno konto na pojazd, patrz `09` punkt 9.2. Hasło do menedżera haseł |
 | 4. Wpisać konto w portalu | sekcja MQTT | nie w `config.h`, to są ustawienia fabryczne |
 | 5. Profil konfiguracji | retained `cfg`, tabela 10.3 | interwały i progi napięcia zależą od tego, czy auto jest sezonowe |
 | 6. Pomiary W1-W3 na tym aucie | `11` faza 1 | osobno dla każdego auta, patrz 10.5 |

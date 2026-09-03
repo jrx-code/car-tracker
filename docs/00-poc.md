@@ -75,7 +75,7 @@ potem wtyk OBD.
 cd firmware
 cp src/config.example.h src/config.h
 # wypełnij: WIFI_SSID/WIFI_PASS (hotspot telefonu), MQTT_USER/MQTT_PASS,
-# MQTT_ROOT_CA (CA brokera). Wartości z menedzer hasel, plik jest w .gitignore.
+# MQTT_ROOT_CA (CA brokera). Wartości z menedżera hasel, plik jest w .gitignore.
 pio run -e wifi_dev -t upload
 pio device monitor
 ```
@@ -85,7 +85,7 @@ Po stronie HA: skopiuj integrację, dodaj wpis z `vehicle_id` = `nd1`
 pewność, że problem w polu jest problemem urządzenia, a nie integracji:
 
 ```bash
-export MQTT_PASS=$(bw get password "car-tracker MQTT (nd1)")
+export MQTT_PASS=$(pass-manager get "car-tracker MQTT (nd1)")
 tools/sim_track.py --vehicle nd1 --trip --fast
 tools/sim_track.py --vehicle nd1 --backlog 120 --duplicate
 ```

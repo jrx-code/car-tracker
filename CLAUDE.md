@@ -1,6 +1,6 @@
 # car-tracker
 
-Tracker GPS/LTE do dwóch Mazd MX-5 ND (ND1 2016, ND3 2025), zasilany z OBD-II,
+Tracker GPS/LTE do trzech Mazd MX-5 (ND1 2016, ND3 2025, NB facelift), zasilany z OBD-II,
 raportujący do Home Assistant przez MQTT.
 
 ## Struktura
@@ -21,7 +21,7 @@ raportujący do Home Assistant przez MQTT.
   WiFi (`pio run -e wifi_dev`), zasilanie z USB, nie z OBD.** Nic nie kupujemy przed
   zamknięciem PoC wg kryteriów z `docs/00-poc.md`. Nie proponować zakupów wcześniej.
 - Dokumentacja po polsku, kod i commity po angielsku.
-- `firmware/src/config.h` jest w `.gitignore`. Sekrety z menedzer hasel, nigdy w repo.
+- `firmware/src/config.h` jest w `.gitignore`. Sekrety z menedżera haseł, nigdy w repo.
 - **Wszystko, czego nie zmierzono na aucie, jest oznaczone `[DO ZMIERZENIA]`.**
   Nie zamieniać takich znaczników na twierdzenia bez pomiaru.
 - Zmiana formatu `PosRecord` w `state.h` wymaga podbicia `kStoreVersion`
@@ -62,8 +62,8 @@ Faza PoC. **Bench działa**: NEO-6M ma fix (6 satelitów, HDOP 1,6, TTFF 151 s
 w budynku), dane lecą przez WiFi na `http://gps-probe.local/`. Liczby w
 `hardware/pomiary.md`, przebieg w `docs/12-bring-up.md`.
 
-Agregator floty stoi osobno: `tracker-hub`, LXC 420, https://tracker.example.lan
-(repo `z4-server/serwisy/tracker-hub`).
+Agregator floty stoi osobno w repo `tracker-hub`: subskrybuje `cartracker/+/#`,
+trzyma historię w SQLite, wystawia mapę floty i publikuje MQTT discovery do HA.
 
 Kolejny krok: wynieść zestaw na zewnątrz i do auta (`docs/00-poc.md` 0.6),
 równolegle pomiary W1-W3 z `docs/11` (pobór spoczynkowy aut, napięcie na pinie 16).

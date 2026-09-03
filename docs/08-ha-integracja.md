@@ -134,7 +134,7 @@ i to pokrywa całą tabelę 8.2.
 
 Test GPS end to end: naciśnięcie `Zlokalizuj teraz` w HA poszło na `cmd`,
 urządzenie zrobiło fix i odesłało pozycję, a `device_tracker.nd1` pokazał
-52.0000000, 21.0000000, dokładność 3,0 m i 7 satelitów, zgodnie co do cyfry
+pozycję zgodną co do cyfry, dokładność 3,0 m i 7 satelitów, zgodnie co do cyfry
 z tym, co zapisał hub. Dokładność liczona z HDOP tak samo jak w integracji
 (HDOP × 2,5 m).
 
@@ -221,7 +221,7 @@ a agregat daje tę samą wartość użytkową przy mniejszej wrażliwości.
 ## 8.8 Testowanie bez sprzętu
 
 ```bash
-export MQTT_PASS=$(bw get password "car-tracker MQTT (nd1)")
+export MQTT_PASS=$(pass-manager get "car-tracker MQTT (nd1)")
 tools/sim_track.py --vehicle nd1 --trip --fast          # przejazd
 tools/sim_track.py --vehicle nd1 --park --fast          # postój, napięcie spada
 tools/sim_track.py --vehicle nd1 --alarm --fast         # ruch bez zapłonu

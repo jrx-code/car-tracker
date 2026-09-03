@@ -46,7 +46,7 @@ def build_client(args: argparse.Namespace, lwt_topic: str) -> mqtt.Client:
         client = mqtt.Client(client_id=f"sim-{args.vehicle}")
     password = args.password or os.environ.get("MQTT_PASS")
     if not password:
-        sys.exit("set --password or MQTT_PASS (menedzer hasel, never hardcode)")
+        sys.exit("set --password or MQTT_PASS (from a password manager, never hardcode)")
     client.username_pw_set(args.user, password)
     client.will_set(lwt_topic, "offline", qos=1, retain=True)
     if not args.insecure:

@@ -13,7 +13,7 @@ Odczytane z `esptool` przez `/dev/ttyUSB0`, nie z opisu na opakowaniu:
 | Rdzenie | dwurdzeniowy, 240 MHz |
 | Radio | WiFi + Bluetooth |
 | Flash | 4 MB, 3,3 V |
-| MAC | `aa:bb:cc:dd:ee:ff` |
+| MAC | `aa:bb:cc:dd:ee:ff` (przykładowy) |
 | Konwerter USB | Silicon Labs CP2102 |
 | Port | `/dev/ttyUSB0` |
 | Kalibracja Vref | obecna w eFuse (przyda się przy pomiarze napięcia, docs/04 punkt 4.4) |
@@ -89,7 +89,7 @@ nie ma. Z podciągnięciem "nic nie podłączone" znaczy dokładnie zero bajtów
 Probe łączy się z **IoT-SSID** i wystawia cały status po HTTP, więc płytka
 może leżeć na parapecie albo w aucie, zasilana z powerbanka, bez kabla do laptopa.
 
-Parametry sieci sprawdzone w kontrolerze kontroler WiFi przed wgraniem, nie założone:
+Parametry sieci sprawdzone w kontrolerze WiFi przed wgraniem, nie założone:
 
 | | |
 |---|---|
@@ -97,7 +97,7 @@ Parametry sieci sprawdzone w kontrolerze kontroler WiFi przed wgraniem, nie zał
 | PMF | wyłączone |
 | Pasmo | wyłącznie 2,4 GHz |
 | Minimalna prędkość | 1 Mb/s |
-| Sieć | VLAN 40, `iot.example.lan`, 192.0.2.0/24, DHCP od .6 |
+| Sieć | wydzielony VLAN IoT, adresacja z DHCP |
 | Izolacja L2 | wyłączona |
 
 To komplet warunków, przy których ESP32 łączy się bez niespodzianek. WPA3-only
@@ -110,7 +110,7 @@ Zmierzone po wgraniu:
 | Adres | 192.0.2.42 (DHCP) |
 | RSSI | -64 dBm |
 | Strona | `http://192.0.2.42/` oraz `http://gps-probe.local/` |
-| Dostęp z LAN 198.51.100.0/24 | **działa**, sprawdzone `curl` i `ping` (rtt 38-67 ms) |
+| Dostęp z LAN | **działa**, sprawdzone `curl` i `ping` (rtt 38-67 ms) |
 | mDNS przez VLAN | **działa**, `gps-probe.local` rozwiązuje się z LAN |
 
 Endpointy: `/` (strona, odświeżanie co 3 s), `/json` (do skryptów i do wykresu),
@@ -121,9 +121,9 @@ fixa. Dzięki temu wystawiony na parapet moduł mówi coś nawet bez zaglądania
 
 Adres jest z DHCP, więc może się zmienić po dłuższym odłączeniu. `gps-probe.local`
 działa niezależnie od adresu. Jeśli przeszkadza, do zrobienia jest rezerwacja
-DHCP w kontroler WiFi na MAC `aa:bb:cc:dd:ee:ff`.
+DHCP na adres MAC płytki.
 
-Hasło do sieci pobrane z kontrolera kontroler WiFi i zapisane w `firmware/probe/src/secrets.h`,
+Hasło do sieci zapisane w `firmware/probe/src/secrets.h`,
 który jest w `.gitignore`. W repo jest tylko `secrets.example.h`.
 
 ## 12.6 Podłączenie NEO-6M

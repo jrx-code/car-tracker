@@ -1,6 +1,6 @@
 # car-tracker
 
-Tracker GPS/LTE do dwóch Mazd MX-5 (ND1 2016, ND3 2025), zasilany z gniazda OBD-II,
+Tracker GPS/LTE do trzech Mazd MX-5 (ND1 2016, ND3 2025, NB facelift), zasilany z gniazda OBD-II,
 raportujący telemetrię do Home Assistant przez MQTT (EMQX, TLS).
 
 Repo zawiera **całość**: założenia, analizę wariantów sprzętowych, schemat zasilania,
@@ -41,5 +41,4 @@ Wszystko, co wymaga pomiaru na realnym aucie, jest w dokumentach oznaczone
 
 - Kod, komentarze, commity, nazwy plików: angielski. Dokumentacja: polski.
 - Sekrety (APN, hasło MQTT, PIN karty SIM) nigdy w repo: `firmware/src/config.h` jest w `.gitignore`,
-  wzorzec w `config.example.h`, wartości w menedzer hasel.
-- Remote: `git@git.example.lan:owner/car-tracker.git`.
+  wzorzec w `config.example.h`, wartości w menedżerze haseł.
