@@ -53,22 +53,65 @@ DTC i do VIN-u, bo reszta i tak leci w rozgłoszeniach.
 
 ### Które piny
 
-Tu jest sprzeczność między źródłami i nie wolno jej zamieść:
+Rozstrzygnięte manualem warsztatowym ND, strona `DLC-2 [EPS CONTROL MODULE]`.
+Mazda numeruje styki literami A-P, w kolumnach: górny rząd `A C E G I K M O`,
+dolny `B D F H J L N P`. Tabela funkcji z manuala, tylko styki używane:
 
-| Źródło | HS-CAN 500 kb/s | MS-CAN 125 kb/s | Czego dotyczy |
+| Litera | Funkcja wg Mazdy | Pin J1962 | Źródło |
 |---|---|---|---|
-| mx5things (właściciel ND, sniffer w tym aucie) | piny 6 i 14 | piny 3 i 11 | **MX-5 ND** |
-| Mazda6 Club | piny 3 i 11 | piny 6 i 14 | starsze Mazdy na platformie Forda |
+| A | Battery positive voltage | 16 | SH13220, tabela Terminal/Function; pin z rysunku `am3zzn00004215.gif` + ISO 15031-3 |
+| L | MS CAN communication line Hi | 3 | j.w. |
+| J | Body ground | 4 | j.w. |
+| H | Serial communication ground | 5 | j.w. |
+| F | **HS CAN communication line Hi** | **6** | j.w.; potwierdzone niezależnie przez SM353553 („DLC-2 terminal F (CAN_H side of HS CAN)") |
+| K | MS CAN communication line Lo | 11 | SH13220; potwierdzone przez SM353553 („DLC-2 terminal K (CAN_L side of MS-CAN)") |
+| E | **HS CAN communication line Lo** | **14** | SH13220; potwierdzone przez SM353553 („DLC-2 terminal E (CAN_L side of HS-CAN)") |
 
-Poprzednia wersja tego rozdziału cytowała tylko to drugie i sugerowała, że w ND
-szybka magistrala jest na 3/11. Źródło ND-specyficzne mówi odwrotnie i zgadza się
-z prawem: homologacja OBD-II wymaga, żeby magistrala diagnostyczna była na pinach
-6 i 14. Auto z 2016 bez tego nie przeszłoby homologacji.
+Skróty w kolumnie źródła to identyfikatory stron manuala z bibliografii na końcu
+rozdziału. Styki B, C, D, G, I, M, N, O i P manual oznacza jako „—".
 
-Wniosek roboczy: **piny 6 i 14 to HS-CAN 500 kb/s i to na nich pracujemy.**
-Piny 3 i 11 to osobna magistrala, prawdopodobnie MS-CAN 125 kb/s, i w fazie 2
-jej nie ruszamy. `[DO ZMIERZENIA na ND1 przed pierwszym podpięciem: która para
-ma ruch i z jaką prędkością. Nie przyjmować tego z tabeli powyżej.]`
+Przełożenie liter na numery wynika z tego, że manual sam deklaruje zgodność
+złącza z ISO 15031-3 (SAE J1962), gdzie górny rząd to piny 1-8, a dolny 9-16.
+Nałożenie siatki liter na tę numerację trafia jednocześnie w pięć niezależnych
+funkcji: A na 16 (B+), J na 4 (masa nadwozia), H na 5 (masa sygnałowa), F na 6
+(CAN High) i E na 14 (CAN Low). To nie jest dopasowanie na jednym punkcie.
+
+**HS-CAN jest na pinach 6 i 14**, zgodnie z mx5things i zgodnie z homologacją
+OBD-II. Tabela z Mazda6 Club (3/11 dla HS) dotyczy starszych platform i w ND
+nie obowiązuje. **MS-CAN dochodzi do gniazda i jest na pinach 3 (Hi) i 11 (Lo)**,
+odwrotna kolejność Hi/Lo niż w parze HS.
+
+Do sondy: **pin 6 na CANH płytki, pin 14 na CANL, pin 4 albo 5 na GND.**
+
+Otwarte zostaje samo tempo: 500 kb/s dla HS wymusza ISO 15765-4, ale 125 kb/s
+dla MS to nadal założenie z Mazda6 Club. `[DO ZMIERZENIA w K1: prędkość obu
+magistral przez /scan. Przypisanie pinów jest już rozstrzygnięte, nie mierzymy
+go drugi raz.]`
+
+### Terminatory w ND wg manuala warsztatowego
+
+Manual ND, sekcja MULTIPLEX COMMUNICATION SYSTEM, punkt Construction, podaje
+gdzie siedzą rezystory końcowe i ile mają:
+
+| Magistrala | Terminator 1 | Terminator 2 | Suma na gnieździe |
+|---|---|---|---|
+| HS-CAN | PCM, styki 2AK/2AL, **124 Ω** | zegary, styki B/D, 120 Ω | 124 ∥ 120 = **61,0 Ω** |
+| MS-CAN | zegary, styki C/E, 120 Ω | panel klimatyzacji, styki D/B, 120 Ω | 120 ∥ 120 = **60,0 Ω** |
+
+Zegary są na obu magistralach i stanowią most między nimi.
+
+Wniosek praktyczny, wbrew temu co ten rozdział sugerował wcześniej: **omomierz
+odróżnia parę CAN od pozostałych żył kabla OBD, ale nie odróżnia HS od MS.**
+Jeden om różnicy tonie w rezystancji sondek. Magistralę rozstrzyga wyłącznie
+prędkość, czyli `/scan` z sondy, i to jest właściwa treść kroku K1.
+
+`[NIESPRAWDZONE: czy MS-CAN w ogóle dochodzi do gniazda OBD w ND. Przypisanie
+do pinów 3/11 mamy tylko z bloga mx5things, manual tego nie potwierdza.]`
+
+Skład HS-CAN w ND wg tego samego źródła, przydatny przy dekodowaniu w K3: PCM,
+DSC HU/CM, EVP control unit, EPS control module, BCM, TCM (AT), wzmacniacz Bose,
+czujnik klasyfikacji pasażera, kamera FSC, moduł AFS, start stop unit, CMU,
+SAS control module, instrument cluster.
 
 Pomiar nie wymaga oscyloskopu, tylko transceivera, którego i tak potrzebujemy.
 W trybie listen only kontroler nie wystawia na magistralę niczego nawet przy źle
@@ -88,7 +131,7 @@ pin 14 (CAN L) --+
                  |                            R_S sterowany z GPIO
                  |                            pin D na etapie nasłuchu do Vcc
                  |
-          TWAI ESP32: PIN_CAN_TX 5, PIN_CAN_RX 18
+          TWAI ESP32: PIN_CAN_TX 5, PIN_CAN_RX 13
 ```
 
 Zasady, każda z konkretnego powodu:
@@ -299,4 +342,7 @@ z zimnego silnika i po dziesięciu minutach jazdy.
 - [mx5things: sniffer CAN w MX-5 ND, przypisanie pinów i pierwsze ID](https://mx5things.blog/2017/02/18/can-bus-sniffer/)
 - [Madox.NET: reverse engineering magistrali CAN w Mazdach](http://www.madox.net/blog/2008/11/17/reverse-engineering-the-mazda-can-bus-part-1/)
 - [Mazda6 Club: prędkości magistral HS/MS i przypisanie pinów w starszych Mazdach](https://www.mazda6club.com/threads/deciphering-the-can-bus.449116/)
+- [Manual warsztatowy MX-5 ND, Multiplex Communication System (terminatory HS/MS-CAN)](https://www.mx5manual.com/page.html?docid=SH13474)
+- [Manual warsztatowy MX-5 ND, DLC-2 (funkcje styków gniazda diagnostycznego)](https://www.mx5manual.com/page.html?docid=SH13220)
+- [Manual warsztatowy MX-5 ND, CAN malfunction diagnosis flow (pomiary na DLC-2)](https://www.mx5manual.com/page.html?docid=SM353553)
 - [Alison Chaiken: eksperymenty z CAN w Mazdzie 3](https://she-devel.com/Mazda3_Controller_Area_Network_Experimentation.html)

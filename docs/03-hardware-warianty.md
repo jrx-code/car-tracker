@@ -286,8 +286,10 @@ Dwa wnioski praktyczne:
    da się tu zrobić przez standby. Daje ją za to pin `CAN_TX` na listwie
    zwarty do `3.3V` zamiast do GPIO: wejście nadajnika jest recesywne przy stanie
    wysokim, więc stopień wyjściowy nie ma jak ściągnąć magistrali w dół (patrz
-   `06` punkt 6.2). Na tej płytce to jest zwykła zworka między dwoma sąsiednimi
-   sygnałami listwy.
+   `06` punkt 6.2). Na tej płytce to zworka między pinem 1 a pinem 3 listwy P1,
+   czyli **przez jeden pin, nie między sąsiednimi**: kolejność ze schematu to
+   1 `CAN_TX`, 2 `GND`, 3 `3.3V`, 4 `CAN_RX`, a między D a zasilaniem leży masa.
+   Zwarcie dwóch sąsiednich pinów zwiera tu 3,3 V do masy.
 
 R1 10 kΩ ustawia slew rate około 15 V/µs. Przy 500 kb/s bit trwa 2 µs, więc to
 nie ogranicza. Odbiornik w trybie slope control pracuje normalnie.

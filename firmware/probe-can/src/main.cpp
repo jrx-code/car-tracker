@@ -19,11 +19,12 @@
 // That is what makes the bit rate scan safe to run on somebody else's vehicle.
 //
 // Wiring:
-//   transceiver CANH  -> OBD pin 6      [TO CONFIRM, docs/06 section 6.2]
-//   transceiver CANL  -> OBD pin 14     [TO CONFIRM]
+//   transceiver CANH  -> OBD pin 6      HS-CAN Hi, ND workshop manual DLC-2
+//   transceiver CANL  -> OBD pin 14     HS-CAN Lo, same source
 //   transceiver GND   -> OBD pin 4 and ESP32 GND
+//   MS-CAN, if it is ever wanted, sits on pin 3 (Hi) and pin 11 (Lo).
 //   transceiver VCC   -> ESP32 3V3      (SN65HVD230/231 are 3.3 V parts)
-//   transceiver R/RXD -> ESP32 GPIO18
+//   transceiver R/RXD -> ESP32 GPIO13
 //   transceiver D/TXD -> ESP32 3V3, NOT to a GPIO. See below.
 //   transceiver RS    -> ESP32 GPIO32 if the board brings it out, else leave it
 //
@@ -58,7 +59,7 @@
 // Deliberately not wired to the transceiver: the driver input is held at VCC in
 // hardware. TWAI requires a TX pin, so it drives a pin with nothing on it.
 constexpr gpio_num_t PIN_CAN_TX = GPIO_NUM_19;
-constexpr gpio_num_t PIN_CAN_RX = GPIO_NUM_18;
+constexpr gpio_num_t PIN_CAN_RX = GPIO_NUM_13;
 constexpr int PIN_CAN_RS = 32;  // only if the board brings RS out; LOW = normal
 constexpr int PIN_LED = 2;
 constexpr const char* MDNS_NAME = "can-probe";

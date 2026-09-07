@@ -48,7 +48,12 @@
 // its TX input high, so this works, but verify the board still boots with the
 // transceiver attached before trusting it.
 #define PIN_CAN_TX 5
-#define PIN_CAN_RX 18
+// GPIO 13 and not 14: 14 outputs a PWM signal at boot, so it would fight the
+// transceiver's push-pull R output on every reset. 13 is neither a strapping
+// pin nor active at boot; its only other role is JTAG MTCK, which matters only
+// with a hardware debugger attached. Note the LilyGO block above uses 13 for
+// PIN_ACC_INT, so the two variants cannot share a wiring harness here.
+#define PIN_CAN_RX 13
 // Load switch for the transceiver rail. Not a standby pin: with the engine off
 // the transceiver must be electrically absent from the bus, and the only way to
 // be sure of that is no supply at all (docs/06 section 6.4).
