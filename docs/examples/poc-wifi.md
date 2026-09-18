@@ -1,7 +1,7 @@
 # PoC `wifi_dev` — szybki start
 
-Skrót z `docs/00` §0.5. Cel: bench / hotspot w aucie, bez modemu i bez zasilania
-z OBD.
+Skrót z `docs/00-poc.md` §0.5. Cel: bench / hotspot w aucie, bez modemu i bez
+zasilania z OBD.
 
 ## 1. Konfiguracja fabryczna
 
@@ -17,9 +17,9 @@ cp src/config.example.h src/config.h
 | `WIFI_SSID` / `WIFI_PASS` | hotspot telefonu albo Wi‑Fi w garażu |
 | `MQTT_HOST` / `MQTT_PORT` | broker (np. `mqtt.example.lan:8883`) |
 | `MQTT_USER` / `MQTT_PASS` | konto per pojazd, np. `cartracker-nd1` |
-| `MQTT_ROOT_CA` | CA z łańcucha brokera — **nie** ogólny root tej samej marki; wyciągnięcie w `docs/13` §13.6 |
+| `MQTT_ROOT_CA` | CA z łańcucha brokera — **nie** ogólny root tej samej marki; wyciągnięcie w `docs/13-portal-konfiguracji.md` §13.6 |
 
-Pola LTE na `wifi_dev` nie są używane.
+Pola LTE (`GSM_*`) na `wifi_dev` nie są używane.
 
 ## 2. Build i wgranie
 
@@ -34,7 +34,7 @@ możesz dogrywać w portalu (`docs/13`); `config.h` to tylko fabryka.
 ## 3. HA i symulator (bez sprzętu)
 
 HA: integracja MQTT na tego samego brokera. Encje powstają z discovery huba
-(`docs/08`). Przed jazdą warto przepuścić symulator:
+(`docs/08-ha-integracja.md`). Przed jazdą warto przepuścić symulator:
 
 ```bash
 export MQTT_PASS='…'   # z menedżera haseł
@@ -47,5 +47,5 @@ tools/sim_track.py --vehicle nd1 --trip --dry-run
 
 ## 4. Co PoC ma zamknąć
 
-Kryteria w `docs/00` §0.6 (ciągły ślad, kolejka offline, liczby z NEO-6M,
-interwał/kurs). Dopiero potem decyzje zakupowe z `docs/03`.
+Kryteria w `docs/00-poc.md` §0.6 (ciągły ślad, kolejka offline, liczby z NEO-6M,
+interwał/kurs). Dopiero potem decyzje zakupowe z `docs/03-hardware-warianty.md`.
