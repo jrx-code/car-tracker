@@ -1,0 +1,71 @@
+name: CI
+
+# Intended path: .github/workflows/ci.yml
+# The GitHub MCP token used for this PR cannot create/update files under
+# .github/workflows/ (API returns 404 without the `workflows` scope).
+# Copy this file to .github/workflows/ci.yml (or grant workflows:write and
+# re-apply) so Actions actually runs.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Lint Python
+        run: ruff check ha-integration/custom_components/car_tracker tools/
+
+  firmware:
+    name: PlatformIO
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: platformio-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
+          restore-keys: |
+            platformio-${{ runner.os }}-
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PlatformIO
+        run: pip install -U platformio
+
+      - name: Provide compile-time config.h
+        # config.h is gitignored; example placeholders are enough to compile.
+        run: cp firmware/src/config.example.h firmware/src/config.h
+
+      - name: Build all firmware environments
+        working-directory: firmware
+        run: >-
+          pio run
+          -e wifi_dev
+          -e sim7670g
+          -e a7670e
+          -e sim7080g
+          -e sim7600e
+          -e lilygo_a7670

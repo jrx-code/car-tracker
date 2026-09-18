@@ -66,3 +66,27 @@ błędu. To trzeba potwierdzić na bench przed montażem w aucie.
   ani wystawać pod nogi kierowcy.
 - Urządzenie nie może w żadnym trybie ingerować w działanie auta. Dotyczy to także
   fazy 2: nasłuch pasywny, bez ramek wysyłanych na magistralę przy jeździe.
+
+## 9.6 Uwierzytelnianie strony floty (`tracker-hub`)
+
+Strona floty (mapa, historia, podgląd pojazdów) jest dziś **otwarta celowo** — to
+wybór prototypu, nie przeoczenie (README, next step 7). Encje w Home Assistant
+chroni logowanie HA; strona floty to osobna powierzchnia ataku i **nie wolno**
+traktować jej jak wewnętrznego dashboardu bez haseł, gdy w sieci pojawią się
+prawdziwe auta.
+
+**Wymaganie przed produkcją / realnymi samochodami:** strona floty musi wymagać
+uwierzytelnienia. Mapa i historia przejazdów nie mogą być publiczne.
+
+**Rekomendowane podejścia** (wybrać jedno w hubie):
+
+1. **Reverse proxy** (Caddy / nginx / Traefik) z Basic Auth albo OIDC (np. Authelia,
+   Pocket ID, Keycloak) przed `tracker-hub`.
+2. **Sesja natywna w hubie** (login + cookie / token) — jeśli hub ma mieć własne
+   konta niezależnie od proxy.
+
+**Handoff:** implementacja żyje w repozytorium **`tracker-hub`**, nie w `car-tracker`.
+To repo tylko dokumentuje wymóg. Gdy `tracker-hub` będzie dostępne dla tego konta
+GitHub, domknąć auth tam i skreślić ten punkt z README.
+
+Szkic ACL MQTT (osobna warstwa niż HTTP floty): [`docs/examples/emqx-acl.md`](examples/emqx-acl.md).
