@@ -17,9 +17,9 @@ cp src/config.example.h src/config.h
 | `WIFI_SSID` / `WIFI_PASS` | hotspot telefonu albo Wi‑Fi w garażu |
 | `MQTT_HOST` / `MQTT_PORT` | broker (np. `mqtt.example.lan:8883`) |
 | `MQTT_USER` / `MQTT_PASS` | konto per pojazd, np. `cartracker-nd1` |
-| `MQTT_ROOT_CA` | CA z łańcucha brokera — **nie** ogólny root tej samej marki; wyciągnięcie w `docs/13` §13.5 |
+| `MQTT_ROOT_CA` | CA z łańcucha brokera — **nie** ogólny root tej samej marki; wyciągnięcie w `docs/13` §13.6 |
 
-Pola LTE (`GSM_*`) na `wifi_dev` nie są używane.
+Pola LTE na `wifi_dev` nie są używane.
 
 ## 2. Build i wgranie
 
