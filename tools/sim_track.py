@@ -11,6 +11,7 @@ required by anything talking to the broker.
     ./sim_track.py --vehicle nd1 --park           # parked telemetry only
     ./sim_track.py --vehicle nd1 --alarm          # motion while parked
     ./sim_track.py --vehicle nd1 --backlog 120    # flush a fake offline backlog
+    ./sim_track.py --vehicle nd1 --trip --dry-run # print payloads, no broker
 """
 
 from __future__ import annotations
@@ -22,11 +23,12 @@ import os
 import ssl
 import sys
 import time
+from typing import Any, Protocol
 
 try:
     import paho.mqtt.client as mqtt
 except ImportError:  # pragma: no cover
-    sys.exit("pip install paho-mqtt")
+    mqtt = None  # type: ignore[assignment]
 
 DEFAULT_HOST = "mqtt.example.lan"
 DEFAULT_PORT = 8883
@@ -35,7 +37,39 @@ DEFAULT_PORT = 8883
 START_LAT, START_LON = 52.000000, 21.000000
 
 
-def build_client(args: argparse.Namespace, lwt_topic: str) -> mqtt.Client:
+class Publisher(Protocol):
+    def publish(
+        self, topic: str, payload: str, qos: int = 0, retain: bool = False
+    ) -> None: ...
+
+    def loop_stop(self) -> None: ...
+
+    def disconnect(self) -> None: ...
+
+
+class DryRunPublisher:
+    """Prints what would be published; no network."""
+
+    def publish(
+        self, topic: str, payload: str, qos: int = 0, retain: bool = False
+    ) -> None:
+        flag = " retain" if retain else ""
+        print(f"[dry-run] {topic} qos={qos}{flag}: {payload}")
+
+    def loop_stop(self) -> None:
+        return None
+
+    def disconnect(self) -> None:
+        return None
+
+
+def build_client(args: argparse.Namespace, lwt_topic: str) -> Publisher:
+    if args.dry_run:
+        return DryRunPublisher()
+
+    if mqtt is None:  # pragma: no cover
+        sys.exit("pip install paho-mqtt")
+
     # paho 2.x wants an explicit callback API version, 1.x does not know the
     # argument at all. Workstations still ship 1.6, so support both.
     if hasattr(mqtt, "CallbackAPIVersion"):
@@ -110,7 +144,13 @@ def tel_payload(seq: int, voltage: float, mode: str, queued: int = 0) -> str:
     )
 
 
-def run_trip(client: mqtt.Client, base: str, args: argparse.Namespace) -> None:
+def _sleep(args: argparse.Namespace, seconds: float) -> None:
+    if args.dry_run:
+        return
+    time.sleep(seconds)
+
+
+def run_trip(client: Publisher, base: str, args: argparse.Namespace) -> None:
     lat, lon = START_LAT, START_LON
     course = 45
     seq = 1
@@ -139,7 +179,7 @@ def run_trip(client: mqtt.Client, base: str, args: argparse.Namespace) -> None:
         if step % 2 == 0:
             seq += 1
             client.publish(f"{base}/tel", tel_payload(seq, 14.1, "driving"), qos=1)
-        time.sleep(args.interval if not args.fast else 0.2)
+        _sleep(args, args.interval if not args.fast else 0.2)
 
     seq += 1
     client.publish(f"{base}/evt", json.dumps(
@@ -148,18 +188,21 @@ def run_trip(client: mqtt.Client, base: str, args: argparse.Namespace) -> None:
     print("trip finished")
 
 
-def run_park(client: mqtt.Client, base: str, args: argparse.Namespace) -> None:
+def run_park(client: Publisher, base: str, args: argparse.Namespace) -> None:
     seq = 1
     voltage = 12.7
-    while True:
+    ticks = args.points if args.dry_run else None
+    n = 0
+    while ticks is None or n < ticks:
         client.publish(f"{base}/tel", tel_payload(seq, voltage, "parked"), qos=1)
         print(f"tel {seq}: {voltage:.2f} V")
         voltage = max(11.6, voltage - args.drain)
         seq += 1
-        time.sleep(args.interval if not args.fast else 1)
+        n += 1
+        _sleep(args, args.interval if not args.fast else 1)
 
 
-def run_alarm(client: mqtt.Client, base: str, args: argparse.Namespace) -> None:
+def run_alarm(client: Publisher, base: str, args: argparse.Namespace) -> None:
     """Movement with the engine off, the case the firmware decides on its own."""
     lat, lon = START_LAT, START_LON
     seq = 1
@@ -177,14 +220,14 @@ def run_alarm(client: mqtt.Client, base: str, args: argparse.Namespace) -> None:
             qos=1,
         )
         print(f"alarm pos {seq}: {lat:.5f},{lon:.5f}")
-        time.sleep(1 if args.fast else args.interval)
+        _sleep(args, 1 if args.fast else args.interval)
 
 
-def run_backlog(client: mqtt.Client, base: str, args: argparse.Namespace) -> None:
+def run_backlog(client: Publisher, base: str, args: argparse.Namespace) -> None:
     """A batch of points with past timestamps, as after a coverage gap."""
     lat, lon = START_LAT, START_LON
     now = time.time()
-    points = []
+    points: list[dict[str, Any]] = []
     for i in range(args.backlog):
         lat, lon = move(lat, lon, 90, 400)
         points.append(
@@ -201,7 +244,7 @@ def run_backlog(client: mqtt.Client, base: str, args: argparse.Namespace) -> Non
             f"{base}/batch", json.dumps({"n": len(chunk), "pts": chunk}), qos=1
         )
         print(f"batch of {len(chunk)} sent")
-        time.sleep(0.5)
+        _sleep(args, 0.5)
     # Sending the same batch twice on purpose: the integration must deduplicate
     # by seq, because that is the normal outcome of a power cut mid-flush.
     if args.duplicate:
@@ -225,6 +268,11 @@ def main() -> None:
     p.add_argument("--drain", type=float, default=0.05, help="V lost per park tick")
     p.add_argument("--fast", action="store_true", help="compress time")
     p.add_argument("--duplicate", action="store_true", help="resend one batch")
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print payloads without connecting to a broker (no password needed)",
+    )
     mode = p.add_mutually_exclusive_group(required=True)
     mode.add_argument("--trip", action="store_true")
     mode.add_argument("--park", action="store_true")
@@ -258,7 +306,8 @@ def main() -> None:
         pass
     finally:
         client.publish(f"{base}/status", "offline", qos=1, retain=True)
-        time.sleep(0.5)
+        if not args.dry_run:
+            time.sleep(0.5)
         client.loop_stop()
         client.disconnect()
 
