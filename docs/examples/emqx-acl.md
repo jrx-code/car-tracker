@@ -1,11 +1,11 @@
 # Szkic ACL EMQX
 
-Dopasowany do `docs/09-bezpieczenstwo.md` punkt 9.2. To nie jest gotowa konfiguracja
-produkcyjna — tylko wzorzec ról i prefiksów tematów. Hasła generuj lokalnie
-(`openssl rand -base64 24`) i trzymaj w menedżerze haseł; **nigdy w repo**.
+Dopasowany do `docs/09` §9.2. To nie jest gotowa konfiguracja produkcyjna — tylko
+wzorzec ról i prefiksów tematów. Hasła generuj lokalnie (`openssl rand -base64 24`)
+i trzymaj w menedżerze haseł; **nigdy w repo**.
 
 Prefiks tematów: `cartracker/<vehicle_id>/…` (`vehicle_id`: `nd1`, `nd3`, …).
-Pełna tabela w `docs/05-protokol-mqtt.md` §5.1.
+Pełna tabela w `docs/05` §5.1.
 
 ## Użytkownicy
 
