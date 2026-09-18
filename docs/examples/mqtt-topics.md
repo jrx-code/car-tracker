@@ -1,6 +1,6 @@
 # MQTT topics — ściągawka
 
-Jedna strona z `docs/05-protokol-mqtt.md`. Prefiks: `cartracker/<vehicle_id>/`.
+Jedna strona z `docs/05`. Prefiks: `cartracker/<vehicle_id>/`.
 Broker: TLS, użytkownik per pojazd (`docs/09` §9.2).
 
 | Temat | Kierunek | QoS | Retained | Opis |
@@ -20,7 +20,7 @@ Broker: TLS, użytkownik per pojazd (`docs/09` §9.2).
 **Uwagi szybkie**
 
 - `pos`/`tel` retained od 2026-09-02: po restarcie HA mapa nie jest pusta, ale
-  nie otwieraj przejazdu z retained pozycji.
+  nie otwieraj przejazdu z retained pozycji (`docs/05` §5.1).
 - `cmd` nigdy retained — retained `reboot` = pętla restartów.
 - ACL: pojazd pisze tylko własny prefiks; HA pisze `cfg`/`cmd` — szkic w
   [`emqx-acl.md`](emqx-acl.md).
