@@ -4,7 +4,8 @@ Dopasowany do `docs/09-bezpieczenstwo.md` punkt 9.2. To nie jest gotowa konfigur
 produkcyjna — tylko wzorzec ról i prefiksów tematów. Hasła generuj lokalnie
 (`openssl rand -base64 24`) i trzymaj w menedżerze haseł; **nigdy w repo**.
 
-Prefiks: `cartracker/<vehicle_id>/…` (`vehicle_id`: `nd1`, `nd3`, …).
+Prefiks tematów: `cartracker/<vehicle_id>/…` (`vehicle_id`: `nd1`, `nd3`, …).
+Pełna tabela w `docs/05-protokol-mqtt.md` §5.1.
 
 ## Użytkownicy
 
@@ -12,12 +13,12 @@ Prefiks: `cartracker/<vehicle_id>/…` (`vehicle_id`: `nd1`, `nd3`, …).
 |---|---|
 | `cartracker-nd1` | urządzenie w ND1 |
 | `cartracker-nd3` | urządzenie w ND3 |
-| `cartracker-ha` | Home Assistant (i hub, jeśli dzieli konto z HA) |
+| użytkownik HA (osobne konto) | Home Assistant / hub |
 
 Osobne konto na pojazd pozwala odciąć jedno urządzenie (kradzież / wymiana)
 bez ruszania reszty.
 
-## Reguły (szkic)
+## Reguły (szkic, semantyka z §9.2)
 
 ### Pojazd `cartracker-<id>` (np. `cartracker-nd1`)
 
@@ -28,19 +29,19 @@ bez ruszania reszty.
   - `cartracker/<id>/cmd`
 - **zakaz** wszystkiego poza własnym prefiksem (w tym cudze `cmd` / `cfg`)
 
-### Użytkownik HA / hub (`cartracker-ha`)
+### Użytkownik HA / hub
 
 - **publish**:
   - `cartracker/+/cfg`
   - `cartracker/+/cmd`
-  - `cartracker/+/trip` (publikuje hub, nie urządzenie — patrz `docs/05` §5.10)
-  - `homeassistant/#` (MQTT discovery, jeśli hub publikuje discovery)
+  - `cartracker/+/trip` (publikuje hub, nie urządzenie — `docs/05` §5.10)
+  - `homeassistant/#` (MQTT discovery z huba)
 - **subscribe**:
   - `cartracker/#` (stan z urządzeń + trip)
 
 ### Czego unikać
 
-- Wspólnego konta `wspolne-konto` na oba auta i HA.
+- Wspólnego konta na oba auta i HA.
 - Retained na `cmd` (pętla `reboot` — `docs/05` §5.7).
 - Uprawnień pojazdu do zapisu na `cfg` / `cmd` innych pojazdów.
 
@@ -58,7 +59,7 @@ deny  all
 
 # cartracker-nd3 — analogicznie z nd3
 
-# cartracker-ha
+# użytkownik HA
 allow publish  cartracker/+/cfg
 allow publish  cartracker/+/cmd
 allow publish  cartracker/+/trip
