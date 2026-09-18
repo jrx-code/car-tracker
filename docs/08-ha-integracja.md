@@ -226,8 +226,18 @@ tools/sim_track.py --vehicle nd1 --trip --fast          # przejazd
 tools/sim_track.py --vehicle nd1 --park --fast          # postój, napięcie spada
 tools/sim_track.py --vehicle nd1 --alarm --fast         # ruch bez zapłonu
 tools/sim_track.py --vehicle nd1 --backlog 120 --duplicate  # zaległości i duplikaty
+
+# bez brokera — tylko podgląd payloadów:
+tools/sim_track.py --vehicle nd1 --trip --dry-run
 ```
 
 Wariant `--backlog --duplicate` wysyła tę samą paczkę dwa razy. Jeżeli w HA
 pojawią się podwójne punkty, deduplikacja po `seq` nie działa i to jest błąd
 do naprawienia przed montażem w aucie, a nie po.
+
+## 8.9 Strona floty vs HA
+
+Mapa floty (`tracker-hub`) **nie jest częścią Home Assistant**. Encje w HA chroni
+logowanie HA; strona floty to osobny UI i obecnie jest otwarta (prototyp).
+Przed produkcją wymaga własnego uwierzytelnienia — patrz `docs/09` §9.6.
+Odkrycie MQTT / encje HA nie zastępują auth na hubie.
