@@ -4,24 +4,35 @@
 
 #if defined(BOARD_LILYGO_TA7670)
 
-// LilyGO T-A7670G. Values taken from the vendor board definition.
-// [TO VERIFY on the actual board before the first power-up: LilyGO changes
-//  the pin map between board revisions, check the silkscreen and the wiki.]
+// LilyGO T-A7670E R2 (A7670E-FASE). Values from the vendor board definition,
+// LilyGO-T-A76XX examples/ATdebug/utilities.h, block LILYGO_T_A7670, and
+// checked against the board on the bench on 2026-09-28.
 #define PIN_MODEM_TX 26
 #define PIN_MODEM_RX 27
 #define PIN_MODEM_PWRKEY 4
-#define PIN_MODEM_POWER_EN 12  // board power latch, not a load switch
-#define PIN_MODEM_RESET 5
+#define PIN_MODEM_POWER_EN 12  // BOARD_POWERON: must be HIGH or the modem is unpowered
+#define PIN_MODEM_RESET 5      // active HIGH on this board
+#define PIN_MODEM_DTR 25
+#define PIN_MODEM_RING 33
 
-#define PIN_GNSS_TX 21
-#define PIN_GNSS_RX 22
-#define PIN_GNSS_EN -1  // no separate GNSS rail on this board
+// No GNSS UART on the ESP32 side: the receiver lives in the A7670E-FASE and
+// is read over AT (MODEM_HAS_GNSS). -1 disables the UART path in gnss.cpp.
+#define PIN_GNSS_TX -1
+#define PIN_GNSS_RX -1
+#define PIN_GNSS_EN -1
 
-#define PIN_VBAT_ADC 35
-#define PIN_ACC_SDA 15
-#define PIN_ACC_SCL 14
-#define PIN_ACC_INT 13
-#define PIN_LED 12
+// GPIO 35 on this board is the Li-ion cell divider (BOARD_BAT_ADC), not the
+// OBD supply. Read through the OBD calibration it showed 12.85 V on USB power
+// and sent the bench board into deep sleep. Car voltage needs its own divider
+// on a free ADC pin; until then -1, which is the "no divider" bench path.
+#define PIN_VBAT_ADC -1
+// 21/22 are the board I2C pins. 13/14/15 (and 2) belong to the on-board
+// micro SD slot, so the accelerometer must not go there. The LIS3DH is an
+// external part; INT goes to 32, an RTC GPIO, so ext0 deep sleep wake works.
+#define PIN_ACC_SDA 21
+#define PIN_ACC_SCL 22
+#define PIN_ACC_INT 32
+#define PIN_LED -1  // no user LED; GPIO 12 is the modem power latch
 
 #else
 

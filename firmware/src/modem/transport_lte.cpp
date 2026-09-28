@@ -7,6 +7,7 @@
 #include <TinyGsmClient.h>
 
 #include "config.h"
+#include "modem/cgnssinfo.h"
 #include "modem/transport.h"
 #include "pins.h"
 #include "power/power.h"
@@ -29,6 +30,9 @@ PubSubClient mqtt(netClient);
 LinkInfo link;
 MessageHandler handler;
 bool powered = false;
+// The modem rail is cut in PARKED, so the receiver has to be switched on again
+// after every cold start, not once per boot of the ESP32.
+bool gnss_started = false;
 
 void raw(char* topic, uint8_t* payload, unsigned int len) {
   if (handler) handler(topic, payload, len);
@@ -63,9 +67,12 @@ bool powerUp() {
   while (millis() - t0 < 15000) {
     if (modem.testAT(1000)) {
       powered = true;
+      gnss_started = false;
+      Serial.printf("lte: modem up after %lu ms\n", millis() - t0);
       return true;
     }
   }
+  Serial.println("lte: modem does not answer AT");
   power::modemPower(false);
   return false;
 }
@@ -73,6 +80,16 @@ bool powerUp() {
 int16_t csqToDbm(int16_t csq) {
   if (csq < 0 || csq == 99) return 0;
   return static_cast<int16_t>(-113 + 2 * csq);
+}
+
+// A stored PEM that parses to zero certificates leaves TLS with no trust
+// anchor, and the only symptom is "chain could not be linked" much later.
+// Seen 2026-09-28 after an upload that turned every '+' into a space.
+void warnIfNoAnchor(const String& pem) {
+  X509List probe(pem.c_str());
+  if (probe.getCount() == 0) {
+    Serial.println("lte: stored CA has no parsable certificate, TLS will fail");
+  }
 }
 
 }  // namespace
@@ -86,6 +103,7 @@ bool begin() {
     netClient.setInsecure();
   } else if (ca.length() > 100) {
     netClient.setCACert(ca.c_str());
+    warnIfNoAnchor(ca);
   } else {
     netClient.setCACert(MQTT_ROOT_CA);
   }
@@ -108,9 +126,18 @@ bool connect(const char* client_id, const char* user, const char* pass,
     modem.simUnlock(cfg.sim_pin);
   }
 
-  if (!modem.waitForNetwork(60000L, true)) return false;
-  if (!modem.gprsConnect(cfg.apn, cfg.apn_user, cfg.apn_pass)) return false;
-  if (!modem.isGprsConnected()) return false;
+  if (!modem.waitForNetwork(60000L, true)) {
+    Serial.printf("lte: no network, reg=%d csq=%d\n",
+                  static_cast<int>(modem.getRegistrationStatus()),
+                  static_cast<int>(modem.getSignalQuality()));
+    return false;
+  }
+  if (!modem.gprsConnect(cfg.apn, cfg.apn_user, cfg.apn_pass) ||
+      !modem.isGprsConnected()) {
+    Serial.printf("lte: data attach failed, apn=%s\n", cfg.apn);
+    return false;
+  }
+  Serial.printf("lte: online, %s\n", modem.getLocalIP().c_str());
 
   link.rssi = csqToDbm(modem.getSignalQuality());
   link.roaming = modem.isNetworkConnected() && modem.getRegistrationStatus() == 5;
@@ -125,7 +152,19 @@ bool connect(const char* client_id, const char* user, const char* pass,
 #endif
 
   if (mqtt.connected()) return true;
-  return mqtt.connect(client_id, user, pass, lwt_topic, 1, true, lwt_payload);
+  // Nothing sets the ESP32 clock on this path, and BearSSL checks certificate
+  // dates against it; hand it the network time instead (see transport_wifi).
+  if (cfg.mqtt_verify_ca) {
+    const uint32_t nt = networkTime();
+    if (nt == 0) {
+      Serial.println("lte: no network time yet, TLS postponed");
+      return false;
+    }
+    netClient.setX509Time(nt);
+  }
+  const bool ok = mqtt.connect(client_id, user, pass, lwt_topic, 1, true, lwt_payload);
+  Serial.printf("lte: mqtt %s, state=%d\n", ok ? "connected" : "failed", mqtt.state());
+  return ok;
 }
 
 bool connected() { return powered && modem.isGprsConnected() && mqtt.connected(); }
@@ -169,7 +208,34 @@ uint32_t networkTime() {
 
 bool modemGnssFix(double& lat, double& lon, float& speed_kmh, float& course,
                   float& alt, int& sats, float& hdop, uint32_t& utc_ts) {
-#if MODEM_HAS_GNSS
+#if MODEM_HAS_GNSS && defined(TINY_GSM_MODEM_A7672X)
+  if (!powered) return false;
+  // TinyGSM 0.12 has no GNSS API for the A7672X class, so this talks AT
+  // directly and parses the line in modem/cgnssinfo.h.
+  if (!gnss_started) {
+    modem.sendAT(GF("+CGNSSPWR=1"));
+    if (modem.waitResponse(2000L) != 1) return false;
+    // "+CGNSSPWR: READY!" arrives as a URC a few seconds later; until then
+    // CGNSSINFO just returns the empty no-fix line, which parse() rejects.
+    gnss_started = true;
+  }
+  modem.sendAT(GF("+CGNSSINFO"));
+  if (modem.waitResponse(2000L, GF("+CGNSSINFO:")) != 1) return false;
+  const String line = atSerial.readStringUntil('\n');
+  modem.waitResponse();
+
+  cgnss::Fix fix;
+  if (!cgnss::parse(line.c_str(), fix)) return false;
+  lat = fix.lat;
+  lon = fix.lon;
+  speed_kmh = fix.speed_kmh;
+  course = fix.course;
+  alt = fix.alt;
+  sats = fix.sats;
+  hdop = fix.hdop;
+  utc_ts = fix.utc_ts;
+  return true;
+#elif MODEM_HAS_GNSS
   if (!powered) return false;
   static bool gps_started = false;
   if (!gps_started) {

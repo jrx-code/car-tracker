@@ -277,6 +277,20 @@ void publishTelemetry() {
   saveSeq();
 }
 
+// Feeds the modem receiver's fix into gnss::, so every consumer (drive loop,
+// locate, portal status) sees both sources through gnss::fill().
+void pumpModemGnss() {
+#if MODEM_HAS_GNSS
+  double mlat, mlon;
+  float mspd, mcrs, malt, mhdop;
+  int msat;
+  uint32_t mts;
+  if (transport::modemGnssFix(mlat, mlon, mspd, mcrs, malt, msat, mhdop, mts)) {
+    gnss::feedModemFix(mlat, mlon, mspd, mcrs, malt, msat, mhdop, mts);
+  }
+#endif
+}
+
 void handleCommand(const uint8_t* payload, unsigned len) {
   JsonDocument doc;
   if (deserializeJson(doc, payload, len) != DeserializationError::Ok) return;
@@ -294,6 +308,7 @@ void handleCommand(const uint8_t* payload, unsigned len) {
     bool got = false;
     while (millis() < deadline) {
       gnss::poll();
+      pumpModemGnss();
       if (gnss::fill(rec, cfg.hdop_max)) { got = true; break; }
       delay(100);
     }
@@ -395,19 +410,20 @@ String statusJson() {
   doc["mqtt"] = transport::connected();
   doc["queued"] = store::count();
   doc["uptime"] = millis() / 1000;
-  doc["sat"] = gnss::satellites();
-  doc["fix"] = gnss::hasFix();
-  if (gnss::hasFix()) {
-    doc["hdop"] = gnss::hdop();
-    // Straight from the receiver, not from the last transmitted point: while
-    // parked nothing is transmitted, so the buffered position stays empty and
-    // the page would claim "no position" next to a healthy satellite count.
-    PosRecord now = {};
-    if (gnss::fill(now, 99.0f)) {
-      doc["lat"] = now.lat_e7 / 1e7;
-      doc["lon"] = now.lon_e7 / 1e7;
-      doc["speed"] = now.spd_ckmh / 100.0;
-    }
+  // Straight from the receivers, not from the last transmitted point: while
+  // parked nothing is transmitted, so the buffered position stays empty and
+  // the page would claim "no position" next to a healthy satellite count.
+  // gnss::fill() covers both the UART receiver and the modem one.
+  PosRecord now = {};
+  const bool have = gnss::fill(now, 99.0f);
+  doc["sat"] = have ? now.sat : gnss::satellites();
+  doc["fix"] = have;
+  if (have) {
+    doc["hdop"] = now.hdop_x10 / 10.0;
+    doc["lat"] = now.lat_e7 / 1e7;
+    doc["lon"] = now.lon_e7 / 1e7;
+    doc["speed"] = now.spd_ckmh / 100.0;
+    doc["gnss_src"] = now.src ? "modem" : "uart";
   }
   const float vbat = power::readVbat();
   if (!isnan(vbat) && vbat > 1.0f) doc["vbat"] = vbat;
@@ -495,15 +511,7 @@ void loop() {
   if (rtc_mode == MODE_DRIVING || rtc_mode == MODE_MOVED) {
     if (!gnss::enabled()) gnss::enable();
 
-#if MODEM_HAS_GNSS
-    double mlat, mlon;
-    float mspd, mcrs, malt, mhdop;
-    int msat;
-    uint32_t mts;
-    if (transport::modemGnssFix(mlat, mlon, mspd, mcrs, malt, msat, mhdop, mts)) {
-      gnss::feedModemFix(mlat, mlon, mspd, mcrs, malt, msat, mhdop, mts);
-    }
-#endif
+    pumpModemGnss();
 
     PosRecord rec = {};
     if (gnss::fill(rec, cfg.hdop_max)) {

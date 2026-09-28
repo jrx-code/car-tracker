@@ -31,7 +31,7 @@ constexpr int kAdcSamples = 32;
 void begin() {
   analogReadResolution(12);
   // 11 dB attenuation gives the widest input range on the ESP32 ADC.
-  analogSetPinAttenuation(PIN_VBAT_ADC, ADC_11db);
+  if (PIN_VBAT_ADC >= 0) analogSetPinAttenuation(PIN_VBAT_ADC, ADC_11db);
 
   if (PIN_MODEM_POWER_EN >= 0) {
     pinMode(PIN_MODEM_POWER_EN, OUTPUT);
@@ -41,8 +41,10 @@ void begin() {
     pinMode(PIN_GNSS_EN, OUTPUT);
     digitalWrite(PIN_GNSS_EN, LOW);
   }
-  pinMode(PIN_LED, OUTPUT);
-  digitalWrite(PIN_LED, LOW);
+  if (PIN_LED >= 0) {
+    pinMode(PIN_LED, OUTPUT);
+    digitalWrite(PIN_LED, LOW);
+  }
 
   prefs.begin("power", true);
   cal_gain = prefs.getFloat("gain", cal_gain);
@@ -51,6 +53,7 @@ void begin() {
 }
 
 float rawAdcAvg() {
+  if (PIN_VBAT_ADC < 0) return 0.0f;
   uint32_t sum = 0;
   for (int i = 0; i < kAdcSamples; i++) {
     sum += analogRead(PIN_VBAT_ADC);
@@ -59,7 +62,11 @@ float rawAdcAvg() {
   return static_cast<float>(sum) / kAdcSamples;
 }
 
-float readVbat() { return rawAdcAvg() * cal_gain + cal_offset; }
+float readVbat() {
+  // No divider: report 0 V, which the mode logic treats as bench power.
+  if (PIN_VBAT_ADC < 0) return 0.0f;
+  return rawAdcAvg() * cal_gain + cal_offset;
+}
 
 float readVsys() {
   // ESP32 has no dedicated supply sense pin; the internal reference reading is
@@ -98,7 +105,7 @@ void deepSleep(uint32_t seconds, bool wake_on_motion) {
   // the single most common way to blow the current budget in docs/04.
   modemPower(false);
   gnssPower(false);
-  digitalWrite(PIN_LED, LOW);
+  if (PIN_LED >= 0) digitalWrite(PIN_LED, LOW);
 
   esp_sleep_enable_timer_wakeup(static_cast<uint64_t>(seconds) * 1000000ULL);
 

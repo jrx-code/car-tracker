@@ -35,20 +35,25 @@ uint32_t toUnix(TinyGPSDate& d, TinyGPSTime& t) {
 
 }  // namespace
 
+// Boards whose receiver sits in the modem have no UART here. Passing -1 to
+// HardwareSerial on UART1 would fall back to GPIO 9/10, the flash pins.
+constexpr bool kHasUart = PIN_GNSS_RX >= 0;
+
 void begin() {
+  if (!kHasUart) return;
   uart.begin(GNSS_BAUD, SERIAL_8N1, PIN_GNSS_RX, PIN_GNSS_TX);
 }
 
 void enable() {
   if (is_enabled) return;
   power::gnssPower(true);
-  uart.begin(GNSS_BAUD, SERIAL_8N1, PIN_GNSS_RX, PIN_GNSS_TX);
+  if (kHasUart) uart.begin(GNSS_BAUD, SERIAL_8N1, PIN_GNSS_RX, PIN_GNSS_TX);
   is_enabled = true;
 }
 
 void disable() {
   if (!is_enabled) return;
-  uart.end();
+  if (kHasUart) uart.end();
   power::gnssPower(false);
   is_enabled = false;
 }
@@ -56,6 +61,7 @@ void disable() {
 bool enabled() { return is_enabled; }
 
 void poll() {
+  if (!kHasUart) return;
   while (uart.available()) {
     if (gps.encode(uart.read()) && gps.location.isValid() &&
         gps.location.isUpdated()) {

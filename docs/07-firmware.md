@@ -16,15 +16,40 @@ pio run -e sim7670g -t upload            # wariant A
 | `a7670e` | A7670E/G | `TINY_GSM_MODEM_A7672X`, `MODEM_HAS_GNSS=0` |
 | `sim7080g` | B, LTE-M/NB-IoT | `TINY_GSM_MODEM_SIM7080`, `MODEM_SUPPORTS_PSM` |
 | `sim7600e` | C, Cat-4 | `TINY_GSM_MODEM_SIM7600` |
-| `lilygo_a7670` | D, gotowa płytka | jak `a7670e` plus `BOARD_LILYGO_TA7670` |
+| `lilygo_a7670` | D, gotowa płytka | jak `a7670e` plus `BOARD_LILYGO_TA7670`, `MODEM_HAS_GNSS=1` |
+| `lilygo_wifi` | D, dane przez WiFi | `TRANSPORT_WIFI`, `BOARD_LILYGO_TA7670`, `MODEM_HAS_GNSS=1` |
 
-Stan na dziś: **wszystkie pięć środowisk kompilują się** (PlatformIO 6.1.19,
+`lilygo_wifi` to płytka LilyGO z danymi po WiFi: modem jest zasilany wyłącznie jako
+odbiornik GNSS (`AT+CGNSSINFO`), bez logowania do sieci. Na biurko i na kartę SIM bez
+transmisji danych.
+
+Stan na dziś: **wszystkie siedem środowisk kompiluje się** (PlatformIO 6.1.19,
 platforma espressif32 55.03.39, Arduino core 3.3.9). Budowa `wifi_dev` zajmuje
 59,9 procent flasha i 13,9 procent RAM przy starcie, więc jest zapas na fazę 2.
 
-Uwaga na `MODEM_HAS_GNSS=0` w środowiskach A7670: to nie jest przeoczenie, tylko
-konsekwencja tego, że o obecności GNSS w tej rodzinie decyduje sufiks modułu
-(FASE ma, LASE nie ma). Po zakupie i sprawdzeniu oznaczenia flagę się podnosi.
+Uwaga na `MODEM_HAS_GNSS=0` w `a7670e`: o obecności GNSS w tej rodzinie decyduje
+sufiks modułu (FASE ma, LASE nie ma). Płytka LilyGO kupiona do projektu ma
+**A7670E-FASE** (fw `A7670M7_B09V01_250619`, sprawdzone 2026-09-28), więc w obu
+środowiskach `lilygo_*` flaga jest podniesiona.
+
+### 7.1.1 LilyGO T-A7670E: co wyszło na biurku (2026-09-28)
+
+- **GNSS siedzi w modemie**, nie na osobnym UART ESP32. TinyGSM 0.12 nie ma dla
+  A7672X żadnego API GNSS, więc odczyt idzie gołym AT i parserem
+  `src/modem/cgnssinfo.h`. Parser sam rozpoznaje liczbę pól i format szerokości
+  (ddmm albo stopnie). `[DO ZWERYFIKOWANIA na prawdziwym fixie]`: układ pól
+  i jednostka prędkości; na biurku widziana była tylko linia bez fixu.
+- **Pin mapa wzięta z definicji producenta** (`utilities.h`, blok `LILYGO_T_A7670`).
+  Poprzednia wersja miała LED na GPIO 12, który jest zasilaniem modemu, oraz
+  akcelerometr na pinach gniazda micro SD.
+- **GPIO 35 to dzielnik ogniwa Li-ion płytki, nie napięcie z OBD.** Przeliczony
+  kalibracją OBD dawał 12,85 V na zasilaniu z USB i usypiał płytkę w PARKED.
+  Do czasu własnego dzielnika z OBD `PIN_VBAT_ADC` jest -1 (ścieżka „bez dzielnika").
+- **TLS czeka na zegar.** BearSSL sprawdza daty certyfikatu względem `time()`;
+  przed NTP to 1970. WiFi czeka na NTP, LTE podaje czas z sieci przez `setX509Time`.
+- **Certyfikat do portalu wysyłać jako `text/plain`.** Wysłany jako formularz
+  (domyślny `curl --data-binary`) zamienia `+` na spacje, zapisuje się bez błędu
+  i daje zero kotwic. Portal teraz odrzuca taki PEM.
 
 ## 7.2 Zależności i jedna niespodzianka
 

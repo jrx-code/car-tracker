@@ -20,3 +20,6 @@ firmware/probe/.pio/
 firmware/probe/src/secrets.h
 firmware/probe-can/.pio/
 firmware/probe-can/src/secrets.h
+
+# Flash dumps: device-specific (MAC, calibration), keep local only
+hardware/backup/

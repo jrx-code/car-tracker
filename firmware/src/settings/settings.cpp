@@ -203,7 +203,7 @@ bool applyJson(const String& json, String& error) {
     int8_t* field;
     bool allow_none;
   } pin_fields[] = {
-      {"pin_gnss_rx", &p->pin_gnss_rx, false},
+      {"pin_gnss_rx", &p->pin_gnss_rx, true},  // -1: GNSS in the modem
       {"pin_gnss_tx", &p->pin_gnss_tx, true},
       {"pin_gnss_en", &p->pin_gnss_en, true},
       {"pin_modem_rx", &p->pin_modem_rx, true},
@@ -280,7 +280,8 @@ bool applyJson(const String& json, String& error) {
     error = "admin_pass must not be empty";
     return false;
   }
-  if (p->pin_gnss_rx == p->pin_gnss_tx) {
+  // Both -1 is valid: the receiver sits in the modem (LilyGO T-A7670E).
+  if (p->pin_gnss_rx >= 0 && p->pin_gnss_rx == p->pin_gnss_tx) {
     error = "GNSS RX and TX cannot be the same pin";
     return false;
   }
@@ -385,6 +386,18 @@ bool setCaCert(const String& pem, String& error) {
       pem.indexOf("-----END CERTIFICATE-----") < 0) {
     error = "not a PEM certificate (missing BEGIN/END CERTIFICATE lines)";
     return false;
+  }
+  // Base64 has no spaces. A space inside the body means the upload went out as
+  // application/x-www-form-urlencoded and every '+' was decoded to ' '; the file
+  // would store fine and then yield no trust anchor at all.
+  {
+    const int body = pem.indexOf("-----BEGIN CERTIFICATE-----") + 27;
+    const int end = pem.lastIndexOf("-----END CERTIFICATE-----");
+    if (end > body && pem.substring(body, end).indexOf(' ') >= 0) {
+      error = "certificate body contains spaces ('+' decoded as a form?). "
+              "Upload it with Content-Type: text/plain";
+      return false;
+    }
   }
   if (pem.length() > 8192) {
     error = "certificate larger than 8 kB";
