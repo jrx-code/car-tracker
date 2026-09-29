@@ -72,7 +72,18 @@ uint32_t msSinceFix() { return last_fix_ms ? (millis() - last_fix_ms) : UINT32_M
 
 void feedModemFix(double lat, double lon, float speed_kmh, float course,
                   float alt, int sats, float h, uint32_t utc_ts) {
-  modem_fix = {true, lat, lon, speed_kmh, course, alt, h, sats, utc_ts, millis()};
+  // Field-by-field: xtensa GCC rejects brace-init assignment into ModemFix
+  // (default member initializers make it non-aggregate for operator=).
+  modem_fix.valid = true;
+  modem_fix.lat = lat;
+  modem_fix.lon = lon;
+  modem_fix.spd = speed_kmh;
+  modem_fix.crs = course;
+  modem_fix.alt = alt;
+  modem_fix.hdop = h;
+  modem_fix.sats = sats;
+  modem_fix.ts = utc_ts;
+  modem_fix.at_ms = millis();
 }
 
 bool fill(PosRecord& out, float hdop_max) {

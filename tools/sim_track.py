@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Telemetry simulator: plays a fake trip onto the broker.
 
 Used in phase 0 of docs/11-plan-wdrozenia.md to exercise the HA integration
@@ -7,11 +6,11 @@ before any hardware exists, and later to reproduce field problems on the bench.
 Standard library only, no external deps beyond paho-mqtt, which is already
 required by anything talking to the broker.
 
-    ./sim_track.py --vehicle nd1 --trip           # drive a loop around Szczecin
-    ./sim_track.py --vehicle nd1 --park           # parked telemetry only
-    ./sim_track.py --vehicle nd1 --alarm          # motion while parked
-    ./sim_track.py --vehicle nd1 --backlog 120    # flush a fake offline backlog
-    ./sim_track.py --vehicle nd1 --trip --dry-run # print payloads, no broker
+    python3 tools/sim_track.py --vehicle nd1 --trip           # drive a loop around Szczecin
+    python3 tools/sim_track.py --vehicle nd1 --park           # parked telemetry only
+    python3 tools/sim_track.py --vehicle nd1 --alarm          # motion while parked
+    python3 tools/sim_track.py --vehicle nd1 --backlog 120    # flush a fake offline backlog
+    python3 tools/sim_track.py --vehicle nd1 --trip --dry-run # print payloads, no broker
 """
 
 from __future__ import annotations
