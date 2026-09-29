@@ -362,7 +362,7 @@ const PIN_IDS=['pin_gnss_rx','pin_gnss_tx','pin_gnss_en','pin_modem_rx','pin_mod
   'pin_modem_pwrkey','pin_modem_en','pin_vbat_adc','pin_acc_int','pin_i2c_sda',
   'pin_i2c_scl','pin_led'];
 PIN_IDS.forEach(id=>{RULES[id]=v=>{
-  if(v===-1)return id==='pin_gnss_rx'?'Wejscie GNSS musi byc podlaczone':'';
+  if(v===-1)return '';  // GNSS in the modem (LilyGO) leaves both GNSS pins at -1
   if(v<0||v>39)return PIN_HELP;
   if(v>=6&&v<=11)return 'GPIO 6-11 obsluguja pamiec flash';
   return '';}});
@@ -396,7 +396,7 @@ function validateAll(){
   });
   // Cross-field rule, same one the firmware refuses on.
   const rx=$('pin_gnss_rx'),tx=$('pin_gnss_tx');
-  if(rx.value!==''&&rx.value===tx.value){
+  if(rx.value!==''&&Number(rx.value)>=0&&rx.value===tx.value){
     rx.classList.add('err');
     rx.parentElement.querySelector('.err-msg').textContent='RX i TX nie moga byc tym samym pinem';
     ok=false;
