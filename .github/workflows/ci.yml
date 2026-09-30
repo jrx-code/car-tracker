@@ -1,10 +1,7 @@
 name: CI
 
-# Intended path: .github/workflows/ci.yml
-# The GitHub MCP token used for this PR cannot create/update files under
-# .github/workflows/ (API returns 404 without the `workflows` scope).
-# Copy this file to .github/workflows/ci.yml (or grant workflows:write and
-# re-apply) so Actions actually runs.
+# GitHub only: the Forgejo runner also picks up .github/workflows when a repo has
+# no .forgejo/workflows, so every job is gated on the server URL.
 
 on:
   push:
@@ -19,6 +16,7 @@ concurrency:
 jobs:
   python:
     name: Ruff
+    if: github.server_url == 'https://github.com'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,6 +33,7 @@ jobs:
 
   firmware:
     name: PlatformIO
+    if: github.server_url == 'https://github.com'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -69,3 +68,4 @@ jobs:
           -e sim7080g
           -e sim7600e
           -e lilygo_a7670
+          -e lilygo_wifi
