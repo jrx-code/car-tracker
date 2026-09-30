@@ -124,8 +124,10 @@ on their own.
 6. **Check the NB facelift's OBD socket.** Its year predates mandatory CAN, so it
    most likely carries a K line, on which there is nothing to listen to. That
    changes what phase 2 can mean for that car.
-7. **Put authentication in front of the fleet page**, which is currently open by
-   deliberate choice while this is a prototype.
+7. **Put authentication in front of the fleet page** before real cars / production.
+   It is open by deliberate prototype choice today. Requirement and options
+   (reverse-proxy Basic/OIDC or hub-native session): `docs/09-bezpieczenstwo.md`
+   §9.6. Implementation belongs in **`tracker-hub`**, not this repo.
 
 ## Conventions
 
