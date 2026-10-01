@@ -170,6 +170,9 @@ bool publish(const char* topic, const char* payload, bool retain) {
 
 bool subscribe(const char* topic) { return mqtt.subscribe(topic, 1); }
 void onMessage(MessageHandler h) { handler = h; }
+// The portal owns the WiFi link and runs from loop(); nothing here blocks long
+// enough on an AT exchange to need it.
+void setIdleHook(IdleHook) {}
 
 void sleep() {
 #if MODEM_HAS_GNSS

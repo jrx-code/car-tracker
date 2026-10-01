@@ -449,6 +449,9 @@ void setup() {
   motion::begin(cfg.motion_sens);
   transport::begin();
   transport::onMessage(onMessage);
+  // An LTE attach blocks for up to minutes; the portal is serviced from inside
+  // those waits, otherwise it is unreachable exactly when it is needed.
+  transport::setIdleHook(portal::loop);
 
   const float vbat = power::readVbat();
 
@@ -486,9 +489,12 @@ void loop() {
     // A failing TLS handshake is slow and noisy; back off instead of hammering.
     static uint32_t last_retry = 0;
     static uint16_t retry_gap_s = 15;
+#if defined(TRANSPORT_WIFI)
     // The first attempt happens before the portal has finished joining WiFi, so
     // it always fails and would otherwise push the backoff to minutes before the
-    // link is even up. Reset it the moment the network appears.
+    // link is even up. Reset it the moment the network appears. Not on LTE: the
+    // portal's WiFi says nothing about the modem, and resetting there cut the
+    // gap to 5 s between attaches that each block for a minute or more.
     static bool had_link = false;
     const bool link = portal::staConnected();
     if (link && !had_link) {
@@ -496,6 +502,7 @@ void loop() {
       last_retry = 0;
     }
     had_link = link;
+#endif
 
     if (millis() - last_retry > retry_gap_s * 1000UL) {
       last_retry = millis();

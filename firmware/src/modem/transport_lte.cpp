@@ -2,6 +2,13 @@
 // differences are in platformio.ini build flags, not here (docs/03).
 #if defined(TRANSPORT_LTE)
 
+// TinyGSM spins on TINY_GSM_YIELD() while it waits for a modem response, and
+// some of those waits are 60 s (CGACT, CGATT, NETCLOSE). Routing the yield to
+// the idle hook keeps the portal alive through them. This is the only file that
+// includes TinyGSM, so the macro is the same for every instantiation.
+void transportLteIdle();
+#define TINY_GSM_YIELD() transportLteIdle()
+
 #include <ESP_SSLClient.h>
 #include <PubSubClient.h>
 #include <TinyGsmClient.h>
@@ -33,6 +40,52 @@ bool powered = false;
 // The modem rail is cut in PARKED, so the receiver has to be switched on again
 // after every cold start, not once per boot of the ESP32.
 bool gnss_started = false;
+
+IdleHook idle_hook = nullptr;
+// The hook only runs inside the attach phases (power up, registration, PDP).
+// The TLS handshake is left out: it runs deep inside BearSSL, and serving a
+// portal request on top of that stack has not been tested.
+bool idle_allowed = false;
+// True while the hook runs, i.e. while an AT command is waiting for its answer.
+// Any AT sent now would interleave with it, so public calls answer from cache.
+bool in_hook = false;
+bool last_connected = false;
+// Set once the PDP context is up, cleared on sleep and on a failed attach.
+// Without it every loop pass asked a modem with no data link (or not answering
+// at all) for CGATT and ran the MQTT client over a dead socket, each call
+// sitting in its full AT timeout: 1 s for CGATT?, 3-5 s for mqtt.loop, up to
+// 8 s for one telemetry packet. Measured 2026-10-01, portal stalled as long.
+bool link_up = false;
+
+// Opens a window in which waits call the idle hook; closes it on scope exit.
+struct IdleWindow {
+  IdleWindow() { idle_allowed = true; }
+  ~IdleWindow() { idle_allowed = false; }
+};
+
+// Network time goes into every telemetry packet and event. Each AT+CCLK? to a
+// modem that is not answering costs its full timeout (2 s per packet, measured
+// 2026-10-01), so the last good reading is kept and extrapolated from millis(),
+// and the modem is asked again at most once a minute.
+uint32_t nt_base = 0;
+uint32_t nt_at_ms = 0;
+uint32_t nt_tried_ms = 0;
+
+// Asks the modem every time; networkTime() is the cached front for it.
+uint32_t queryNetworkTime() {
+  nt_tried_ms = millis();
+  int year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0;
+  float tz = 0;
+  if (!modem.getNetworkTime(&year, &month, &day, &hour, &minute, &second, &tz)) {
+    return 0;
+  }
+  // Network time carries a timezone offset; normalise it to UTC.
+  const uint32_t local = timeutil::toUnixUtc(year, month, day, hour, minute, second);
+  if (local == 0) return 0;
+  nt_base = static_cast<uint32_t>(local - static_cast<int32_t>(tz * 3600.0f));
+  nt_at_ms = millis();
+  return nt_base;
+}
 
 void raw(char* topic, uint8_t* payload, unsigned int len) {
   if (handler) handler(topic, payload, len);
@@ -117,25 +170,33 @@ bool begin() {
 
 bool connect(const char* client_id, const char* user, const char* pass,
              const char* lwt_topic, const char* lwt_payload) {
-  if (!powerUp()) return false;
-
   const settings::Settings& cfg = settings::get();
-  if (strlen(cfg.sim_pin) > 0 && modem.getSimStatus() != 3) {
-    // A locked SIM after three wrong attempts means a trip to the car, so the
-    // PIN is normally disabled on the card instead (docs/09 section 9.2).
-    modem.simUnlock(cfg.sim_pin);
-  }
+  {
+    // Up to 15 s for AT, 60 s for registration and up to 60 s per command for
+    // the PDP context; a SIM without data sits in those waits (2026-09-28).
+    // The portal has to keep running through them.
+    IdleWindow window;
+    link_up = false;
+    if (!powerUp()) return false;
 
-  if (!modem.waitForNetwork(60000L, true)) {
-    Serial.printf("lte: no network, reg=%d csq=%d\n",
-                  static_cast<int>(modem.getRegistrationStatus()),
-                  static_cast<int>(modem.getSignalQuality()));
-    return false;
-  }
-  if (!modem.gprsConnect(cfg.apn, cfg.apn_user, cfg.apn_pass) ||
-      !modem.isGprsConnected()) {
-    Serial.printf("lte: data attach failed, apn=%s\n", cfg.apn);
-    return false;
+    if (strlen(cfg.sim_pin) > 0 && modem.getSimStatus() != 3) {
+      // A locked SIM after three wrong attempts means a trip to the car, so the
+      // PIN is normally disabled on the card instead (docs/09 section 9.2).
+      modem.simUnlock(cfg.sim_pin);
+    }
+
+    if (!modem.waitForNetwork(60000L, true)) {
+      Serial.printf("lte: no network, reg=%d csq=%d\n",
+                    static_cast<int>(modem.getRegistrationStatus()),
+                    static_cast<int>(modem.getSignalQuality()));
+      return false;
+    }
+    if (!modem.gprsConnect(cfg.apn, cfg.apn_user, cfg.apn_pass) ||
+        !modem.isGprsConnected()) {
+      Serial.printf("lte: data attach failed, apn=%s\n", cfg.apn);
+      return false;
+    }
+    link_up = true;
   }
   Serial.printf("lte: online, %s\n", modem.getLocalIP().c_str());
 
@@ -155,7 +216,8 @@ bool connect(const char* client_id, const char* user, const char* pass,
   // Nothing sets the ESP32 clock on this path, and BearSSL checks certificate
   // dates against it; hand it the network time instead (see transport_wifi).
   if (cfg.mqtt_verify_ca) {
-    const uint32_t nt = networkTime();
+    // Asked directly: a stale or missing cached time must not fail the handshake.
+    const uint32_t nt = queryNetworkTime();
     if (nt == 0) {
       Serial.println("lte: no network time yet, TLS postponed");
       return false;
@@ -167,19 +229,37 @@ bool connect(const char* client_id, const char* user, const char* pass,
   return ok;
 }
 
-bool connected() { return powered && modem.isGprsConnected() && mqtt.connected(); }
-void loop() { mqtt.loop(); }
+bool connected() {
+  if (in_hook) return last_connected;
+  last_connected = powered && link_up && modem.isGprsConnected() && mqtt.connected();
+  return last_connected;
+}
+
+void loop() {
+  if (link_up && !in_hook) mqtt.loop();
+}
 
 bool publish(const char* topic, const char* payload, bool retain) {
+  if (!link_up || in_hook) return false;
   return mqtt.publish(topic, payload, retain);
 }
 
-bool subscribe(const char* topic) { return mqtt.subscribe(topic, 1); }
+bool subscribe(const char* topic) {
+  if (!link_up || in_hook) return false;
+  return mqtt.subscribe(topic, 1);
+}
+
 void onMessage(MessageHandler h) { handler = h; }
+void setIdleHook(IdleHook hook) { idle_hook = hook; }
 
 void sleep() {
-  if (mqtt.connected()) mqtt.disconnect();
+  if (link_up && mqtt.connected()) mqtt.disconnect();
+  last_connected = false;
+  link_up = false;
+  nt_tried_ms = 0;
   if (powered) {
+    // NETCLOSE and CGATT=0 wait up to 60 s each.
+    IdleWindow window;
     modem.gprsDisconnect();
     modem.poweroff();
   }
@@ -189,27 +269,22 @@ void sleep() {
 }
 
 const LinkInfo& info() {
-  if (powered) link.rssi = csqToDbm(modem.getSignalQuality());
+  if (powered && link_up && !in_hook) link.rssi = csqToDbm(modem.getSignalQuality());
   return link;
 }
 
 uint32_t networkTime() {
   if (!powered) return 0;
-  int year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0;
-  float tz = 0;
-  if (!modem.getNetworkTime(&year, &month, &day, &hour, &minute, &second, &tz)) {
-    return 0;
-  }
-  // Network time carries a timezone offset; normalise it to UTC.
-  const uint32_t local = timeutil::toUnixUtc(year, month, day, hour, minute, second);
-  if (local == 0) return 0;
-  return static_cast<uint32_t>(local - static_cast<int32_t>(tz * 3600.0f));
+  const uint32_t now = millis();
+  const bool asked_recently = nt_tried_ms != 0 && now - nt_tried_ms < 60000UL;
+  if (!in_hook && !asked_recently) queryNetworkTime();
+  return nt_base ? nt_base + (millis() - nt_at_ms) / 1000UL : 0;
 }
 
 bool modemGnssFix(double& lat, double& lon, float& speed_kmh, float& course,
                   float& alt, int& sats, float& hdop, uint32_t& utc_ts) {
 #if MODEM_HAS_GNSS && defined(TINY_GSM_MODEM_A7672X)
-  if (!powered) return false;
+  if (!powered || in_hook) return false;
   // TinyGSM 0.12 has no GNSS API for the A7672X class, so this talks AT
   // directly and parses the line in modem/cgnssinfo.h.
   if (!gnss_started) {
@@ -236,7 +311,7 @@ bool modemGnssFix(double& lat, double& lon, float& speed_kmh, float& course,
   utc_ts = fix.utc_ts;
   return true;
 #elif MODEM_HAS_GNSS
-  if (!powered) return false;
+  if (!powered || in_hook) return false;
   static bool gps_started = false;
   if (!gps_started) {
     modem.enableGPS();
@@ -267,5 +342,16 @@ bool modemGnssFix(double& lat, double& lon, float& speed_kmh, float& course,
 }
 
 }  // namespace transport
+
+void transportLteIdle() {
+  using namespace transport;
+  if (!idle_allowed || in_hook || idle_hook == nullptr) {
+    delay(0);  // TinyGSM's own default yield
+    return;
+  }
+  in_hook = true;
+  idle_hook();
+  in_hook = false;
+}
 
 #endif  // TRANSPORT_LTE

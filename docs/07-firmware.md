@@ -50,6 +50,18 @@ sufiks modułu (FASE ma, LASE nie ma). Płytka LilyGO kupiona do projektu ma
 - **Certyfikat do portalu wysyłać jako `text/plain`.** Wysłany jako formularz
   (domyślny `curl --data-binary`) zamienia `+` na spacje, zapisuje się bez błędu
   i daje zero kotwic. Portal teraz odrzuca taki PEM.
+- **Portal żyje w trakcie łączenia LTE** (2026-10-01, zgłoszenie #10). TinyGSM
+  czeka na odpowiedź modemu do 60 s na komendę (CGACT, CGATT, NETCLOSE), a karta
+  bez danych siedzi w tych oczekiwaniach minutami. `TINY_GSM_YIELD()` jest
+  przekierowane na hook, który w fazach włączania, rejestracji i PDP woła
+  `portal::loop()`; uzgadnianie TLS jest z tego wyłączone. Kod wywołany z hooka
+  nie wysyła AT, odpowiada z ostatniego stanu. Bez zestawionego PDP transport nie
+  dotyka MQTT ani modemu, a czas z sieci jest pamiętany i odpytywany najwyżej raz
+  na minutę. Pomiar na karcie bez danych, `/api/status` co sekundę przez 5 min:
+  przed zmianą 0 z 40 odpowiedzi, po zmianie 235 z 236, mediana 0,13 s.
+  Pojedyncze odpowiedzi 4-5 s zostały, przy szybkim TCP connect i bez żadnej
+  przerwy powyżej 400 ms w firmware; jedna taka była też w wariancie samego WiFi.
+  Przyczyna niewyjaśniona.
 
 ## 7.2 Zależności i jedna niespodzianka
 

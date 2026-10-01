@@ -22,6 +22,13 @@ struct LinkInfo {
 // Bring the hardware up. Does not connect yet.
 bool begin();
 
+// Called repeatedly while connect() or sleep() waits on the link, so the
+// portal stays reachable during an LTE attach that can block for minutes.
+// The hook runs in the middle of an AT exchange: transport calls made from it
+// do not touch the modem and answer from the last known state instead.
+using IdleHook = void (*)();
+void setIdleHook(IdleHook hook);
+
 // Attach to the network and to the broker. Blocking, with an internal timeout.
 bool connect(const char* client_id, const char* user, const char* pass,
              const char* lwt_topic, const char* lwt_payload);
