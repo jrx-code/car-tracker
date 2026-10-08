@@ -65,7 +65,6 @@ uint32_t drive_hint_since_ms = 0;
 uint32_t gnss_sample_ms = 0;
 uint32_t gnss_slow_since_ms = 0;
 uint32_t gnss_nofix_since_ms = 0;
-uint8_t gnss_fast_samples = 0;
 bool warned_low_battery = false;
 PosRecord last_pos = {};
 bool have_last_pos = false;
@@ -141,11 +140,37 @@ void pumpModemGnss();
 // recorded and PoC criterion 1 was out of reach (review 2026-10-08). Power is
 // no concern on a bank, so the receiver stays on and GNSS speed decides.
 // [DO ZMIERZENIA] thresholds: set from the first drive, not from data yet.
-constexpr float kGnssDriveKmh = 10.0f;      // two samples at or above: trip_start
-constexpr float kGnssStopKmh = 3.0f;        // below this counts as standing
+constexpr float kGnssDriveKmh = 10.0f;      // speed that may start a trip...
+constexpr float kGnssLeaveM = 150.0f;       // ...but only this far from where it parked
+constexpr float kGnssStayM = 50.0f;         // within this radius for kGnssStopMs: parked
 constexpr uint32_t kGnssStopMs = 180000UL;  // standing this long: trip_end
 constexpr uint32_t kGnssLostMs = 600000UL;  // no fix this long: trip_end too
 constexpr uint32_t kGnssSampleMs = 5000UL;  // sampling period while parked
+
+// Speed alone failed on the bench (2026-10-08): a board lying still reported
+// 0 -> 6.9 -> 3.9 km/h with HDOP ~2, opened a trip and never closed it, since
+// the jitter kept resetting a speed-based stop timer. Displacement filters
+// that: parked-to-driving needs the position to leave the parking spot,
+// driving-to-parked needs it to stay inside a small circle.
+struct GnssAnchor {
+  bool set = false;
+  int32_t lat_e7 = 0, lon_e7 = 0;
+};
+GnssAnchor park_anchor, stop_anchor;
+
+void setAnchor(GnssAnchor& a, const PosRecord& r) {
+  a.set = true;
+  a.lat_e7 = r.lat_e7;
+  a.lon_e7 = r.lon_e7;
+}
+
+// Equirectangular distance; plenty for a few hundred metres.
+float metresFrom(const GnssAnchor& a, const PosRecord& r) {
+  const float lat = r.lat_e7 * 1e-7f * 0.0174533f;
+  const float dy = (r.lat_e7 - a.lat_e7) * 1e-7f * 110540.0f;
+  const float dx = (r.lon_e7 - a.lon_e7) * 1e-7f * 111320.0f * cosf(lat);
+  return sqrtf(dx * dx + dy * dy);
+}
 
 void updateModeFromGnss(uint32_t now) {
   if (!gnss::enabled()) gnss::enable();
@@ -166,32 +191,32 @@ void updateModeFromGnss(uint32_t now) {
     if (!fix) {
       if (gnss_nofix_since_ms == 0) gnss_nofix_since_ms = now;
       if (now - gnss_nofix_since_ms > kGnssLostMs) {
-        gnss_nofix_since_ms = gnss_slow_since_ms = 0;
+        gnss_nofix_since_ms = 0;
+        park_anchor.set = false;
         setMode(MODE_PARKED, "trip_end");
       }
       return;
     }
     gnss_nofix_since_ms = 0;
-    if (kmh >= kGnssStopKmh) {
-      gnss_slow_since_ms = 0;
-    } else {
-      if (gnss_slow_since_ms == 0) gnss_slow_since_ms = now;
-      if (now - gnss_slow_since_ms > kGnssStopMs) {
-        gnss_slow_since_ms = 0;
-        setMode(MODE_PARKED, "trip_end");
-      }
+    if (!stop_anchor.set || metresFrom(stop_anchor, rec) > kGnssStayM) {
+      setAnchor(stop_anchor, rec);
+      gnss_slow_since_ms = now;
+    } else if (now - gnss_slow_since_ms > kGnssStopMs) {
+      setAnchor(park_anchor, rec);
+      stop_anchor.set = false;
+      setMode(MODE_PARKED, "trip_end");
     }
     return;
   }
 
-  // Two samples in a row, so one noisy fix does not open a trip.
-  if (fix && kmh >= kGnssDriveKmh) {
-    if (++gnss_fast_samples >= 2) {
-      gnss_fast_samples = 0;
-      setMode(MODE_DRIVING, "trip_start");
-    }
-  } else {
-    gnss_fast_samples = 0;
+  if (!fix) return;
+  if (!park_anchor.set) {
+    setAnchor(park_anchor, rec);  // first fix since boot or since parking
+    return;
+  }
+  if (kmh >= kGnssDriveKmh && metresFrom(park_anchor, rec) > kGnssLeaveM) {
+    stop_anchor.set = false;
+    setMode(MODE_DRIVING, "trip_start");
   }
 }
 
