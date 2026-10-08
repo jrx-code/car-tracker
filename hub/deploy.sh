@@ -53,11 +53,13 @@ rsync -az --no-owner --no-group --delete --chmod=D755,F644 \
   "$HERE/tracker_hub" "$HERE/web" "$TARGET:$APP_DIR/"
 
 say "systemd unit"
-rsync -az --chmod=F644 "$HERE/systemd/tracker-hub.service" "$TARGET:/etc/systemd/system/"
+# Same NFS ownership trap as the code step above: without --no-owner the
+# chown fails with EINVAL and set -e stops the deploy before the restart.
+rsync -az --no-owner --no-group --chmod=F644 "$HERE/systemd/tracker-hub.service" "$TARGET:/etc/systemd/system/"
 
 if ! ssh "$TARGET" test -f "$ETC_DIR/tracker-hub.env"; then
   say "no env file on the target, installing the template"
-  rsync -az "$HERE/.env.example" "$TARGET:$ETC_DIR/tracker-hub.env"
+  rsync -az --no-owner --no-group "$HERE/.env.example" "$TARGET:$ETC_DIR/tracker-hub.env"
   ssh "$TARGET" "chown root:tracker $ETC_DIR/tracker-hub.env && chmod 640 $ETC_DIR/tracker-hub.env"
   echo
   echo "  Fill in MQTT_PASS on the target from the password manager, then re-run:"
