@@ -207,8 +207,8 @@ osiągalną z sieci operatora, więc hub wysyła obraz kawałkami przez niego.
    start wysyła zdarzenie `ota_confirmed`.
 
 Postęp i wynik przychodzą jako `ack` na komendę `ota`; nieudane `locate` podaje
-ostatnią surową linię `+CGNSSINFO`. `TINY_GSM_RX_BUFFER` podniesiony do 1024:
-z domyślnym 64 każdy rekord TLS to kilkadziesiąt wymian AT z modemem.
+ostatnią surową linię `+CGNSSINFO`. `TINY_GSM_RX_BUFFER` zostaje domyślne (64):
+z 1024 odpowiedź na `ping` szła 41 s zamiast poniżej 1 s (pomiar 2026-10-08).
 
 `[DO ZMIERZENIA]` czas przesłania obrazu ~0,9 MB po LTE i zużycie danych; całość
 nie była jeszcze uruchomiona na płytce. Pierwsze wgranie z OTA idzie przez USB.

@@ -384,6 +384,7 @@ void handleCommand(const uint8_t* payload, unsigned len) {
     packet::buildAck(id, true, millis() - t0, "", buf, sizeof(buf));
     transport::publish(t_ack, buf, false);
   } else if (strcmp(cmd, "locate") == 0) {
+    Serial.println("locate: start");
     gnss::enable();
     PosRecord rec = {};
     const uint32_t deadline = millis() + 60000;
@@ -403,6 +404,7 @@ void handleCommand(const uint8_t* payload, unsigned len) {
     // still searching, anything with digits is a fix the parser did not take.
     char msg[128] = "";
     if (!got) snprintf(msg, sizeof(msg), "no fix; CGNSSINFO: %s", transport::lastGnssLine());
+    Serial.printf("locate: %s after %lu ms\n", got ? "fix" : "no fix", millis() - t0);
     packet::buildAck(id, got, millis() - t0, msg, buf, sizeof(buf));
     transport::publish(t_ack, buf, false);
   } else if (strcmp(cmd, "reboot") == 0) {

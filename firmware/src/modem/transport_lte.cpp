@@ -134,8 +134,27 @@ void pulsePwrKey() {
   digitalWrite(PIN_MODEM_PWRKEY, LOW);
 }
 
+// Cuts the rail without talking to the modem first: for a module that has
+// stopped answering AT, where sleep() would sit in NETCLOSE and CGATT=0 for a
+// minute each. Seen 2026-10-08: after a hang the modem stayed silent, the
+// firmware still counted it as powered and never brought it back, and in a
+// car nobody pulls the plug.
+void powerCycle() {
+  Serial.println("lte: modem does not answer AT, power-cycling it");
+  link_up = false;
+  last_connected = false;
+  nt_tried_ms = 0;
+  power::modemPower(false);
+  atSerial.end();
+  powered = false;
+  delay(3000);  // let the 3.8 V rail fall; a short dip leaves the module up
+}
+
 bool powerUp() {
-  if (powered) return true;
+  if (powered) {
+    if (modem.testAT(2000)) return true;
+    powerCycle();
+  }
   // The rail is switched, not just the chip, so this is a cold start every time
   // we come back from PARKED. That is the deliberate trade in docs/04.
   // RESET is active HIGH on the LilyGO and nothing drove it, so the line was
