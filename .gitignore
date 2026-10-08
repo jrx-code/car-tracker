@@ -1,6 +1,7 @@
 # Secrets: never commit. Values live in a password manager.
 firmware/src/config.h
 *.env
+.env
 .secrets
 
 # PlatformIO
@@ -23,3 +24,8 @@ firmware/probe-can/src/secrets.h
 
 # Flash dumps: device-specific (MAC, calibration), keep local only
 hardware/backup/
+
+# tracker-hub
+hub/.pytest_cache/
+hub/*.db
+hub/web/vendor/

@@ -85,8 +85,10 @@ uwierzytelnienia. Mapa i historia przejazdów nie mogą być publiczne.
 2. **Sesja natywna w hubie** (login + cookie / token) — jeśli hub ma mieć własne
    konta niezależnie od proxy.
 
-**Handoff:** implementacja żyje w repozytorium **`tracker-hub`**, nie w `car-tracker`.
-To repo tylko dokumentuje wymóg. Gdy `tracker-hub` będzie dostępne dla tego konta
-GitHub, domknąć auth tam i skreślić ten punkt z README.
+**Stan:** implementacja jest w `hub/`. Tryb administratora (zapisy, ustawienia
+urządzeń, komendy) wymaga logowania przez Authentik na reverse proxy (podejście 1);
+hub ufa nagłówkowi z tożsamością tylko z adresów `TRUSTED_PROXIES`. Otwarty
+zostaje podgląd floty tylko do odczytu. Gdy i on trafi za logowanie, skreślić
+punkt 7 z README.
 
 Szkic ACL MQTT (osobna warstwa niż HTTP floty): [`docs/examples/emqx-acl.md`](examples/emqx-acl.md).

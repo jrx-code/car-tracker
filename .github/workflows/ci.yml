@@ -29,7 +29,25 @@ jobs:
         run: pip install ruff
 
       - name: Lint Python
-        run: ruff check ha-integration/custom_components/car_tracker tools/
+        run: ruff check ha-integration/custom_components/car_tracker tools/ hub/
+
+  hub:
+    name: tracker-hub tests
+    if: github.server_url == 'https://github.com'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install pytest paho-mqtt
+
+      - name: Run tests
+        working-directory: hub
+        run: python -m pytest tests/ -q
 
   firmware:
     name: PlatformIO

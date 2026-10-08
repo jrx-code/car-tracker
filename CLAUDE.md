@@ -13,6 +13,8 @@ raportujący do Home Assistant przez MQTT.
 - `firmware/probe-can/` — sonda CAN: skan prędkości magistrali, tabela ID z maską
   zmiennych bajtów, log zmian, CSV. Listen only, zasilanie z powerbanku, GUI przez WiFi
 - `ha-integration/custom_components/car_tracker/` — integracja HA
+- `hub/` — tracker-hub: agregator floty (MQTT → SQLite → mapa, API, discovery do HA).
+  Własne zasady w `hub/CLAUDE.md`
 - `tools/sim_track.py` — symulator telemetrii, testy bez sprzętu
 
 ## Zasady w tym repo
@@ -27,8 +29,9 @@ raportujący do Home Assistant przez MQTT.
   Nie zamieniać takich znaczników na twierdzenia bez pomiaru.
 - Zmiana formatu `PosRecord` w `state.h` wymaga podbicia `kStoreVersion`
   w `telemetry/store.cpp`, inaczej stara kolejka zostanie odczytana jako śmieci.
-- Zmiana pakietu w `telemetry/packet.cpp` wymaga zmiany parsera w
-  `ha-integration/.../coordinator.py`. Format jest w `docs/05`.
+- Zmiana pakietu w `telemetry/packet.cpp` wymaga zmiany obu parserów w tym samym
+  commicie: `ha-integration/.../coordinator.py` i `hub/tracker_hub/ingest.py`.
+  Format jest w `docs/05`.
 - Nic nie jest wysyłane na magistralę CAN auta. Nasłuch (K1-K3 z `docs/06`) jest
   pasywny i nie zależy od gate'u fazy 2: sonda chodzi z powerbanku i wychodzi
   z auta razem z kierowcą. Gate dotyczy stałego montażu i zasilania z pinu 16.
@@ -54,7 +57,8 @@ raportujący do Home Assistant przez MQTT.
 
 ```bash
 cd firmware && pio run -e wifi_dev -e sim7670g -e a7670e -e sim7080g -e sim7600e -e lilygo_a7670
-ruff check ha-integration/custom_components/car_tracker tools/
+ruff check ha-integration/custom_components/car_tracker tools/ hub/
+cd hub && python3 -m pytest tests/ -q
 ```
 
 ## Stan
@@ -63,8 +67,9 @@ Faza PoC. **Bench działa**: NEO-6M ma fix (6 satelitów, HDOP 1,6, TTFF 151 s
 w budynku), dane lecą przez WiFi na `http://gps-probe.local/`. Liczby w
 `hardware/pomiary.md`, przebieg w `docs/12-bring-up.md`.
 
-Agregator floty stoi osobno w repo `tracker-hub`: subskrybuje `cartracker/+/#`,
-trzyma historię w SQLite, wystawia mapę floty i publikuje MQTT discovery do HA.
+Agregator floty jest w `hub/` (do 2026-10-08 osobne repo `tracker-hub`):
+subskrybuje `cartracker/+/#`, trzyma historię w SQLite, wystawia mapę floty
+i publikuje MQTT discovery do HA.
 
 Kolejny krok: wynieść zestaw na zewnątrz i do auta (`docs/00-poc.md` 0.6),
 równolegle pomiary W1-W3 z `docs/11` (pobór spoczynkowy aut, napięcie na pinie 16).

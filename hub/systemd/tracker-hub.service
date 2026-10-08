@@ -1,0 +1,35 @@
+[Unit]
+Description=tracker-hub: car tracker aggregator and web UI
+Documentation=https://github.com/jrx-code/car-tracker/tree/main/hub
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tracker
+Group=tracker
+WorkingDirectory=/opt/tracker-hub
+EnvironmentFile=/etc/tracker-hub/tracker-hub.env
+ExecStart=/usr/bin/python3 -m tracker_hub
+Restart=always
+RestartSec=5
+
+# The service needs its database and nothing else on disk.
+StateDirectory=tracker-hub
+ReadWritePaths=/var/lib/tracker-hub
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=512M
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tracker-hub
+
+[Install]
+WantedBy=multi-user.target

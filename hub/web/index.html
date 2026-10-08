@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trackery</title>
+<link rel="stylesheet" href="/vendor/leaflet.css"
+      onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <h1>Trackery</h1>
+  <div id="health" class="pill">łączenie…</div>
+  <!-- Admin mode: signing in goes through Authentik on /admin. Without it the
+       page is read only; every write is also refused by the hub itself. -->
+  <span id="admin-user" class="admin-only"></span>
+  <a id="admin-logout" class="admin-only" href="/outpost.goauthentik.io/sign_out">wyloguj</a>
+  <button id="admin-btn" type="button">Tryb administratora</button>
+</header>
+
+<main>
+  <!-- The fleet is a list of rows, one car per row: the numbers on the left,
+       a thumbnail of where it stands on the right. The full map is a click
+       away rather than permanently occupying most of the window, because on
+       a parked fleet the map is the least changing thing on the page. -->
+  <div id="fleet">
+    <div id="vehicles"></div>
+
+    <section id="detail" hidden>
+      <div class="detail-head">
+        <button id="back" type="button">&larr; wszystkie</button>
+        <h2 id="detail-name"></h2>
+        <span id="detail-plate" class="plate"></span>
+      </div>
+      <div id="detail-vin" class="vin"></div>
+
+      <div class="tabs">
+        <button data-tab="trips" class="active" type="button">Przejazdy</button>
+        <button data-tab="events" type="button">Zdarzenia</button>
+        <button data-tab="battery" type="button">Akumulator</button>
+        <button data-tab="settings" class="admin-only" type="button">Ustawienia</button>
+      </div>
+
+      <div id="tab-trips" class="tab"></div>
+      <div id="tab-events" class="tab" hidden></div>
+      <div id="tab-battery" class="tab" hidden></div>
+      <div id="tab-settings" class="tab" hidden></div>
+
+      <div class="commands admin-only">
+        <button data-cmd="locate" type="button">Zlokalizuj teraz</button>
+        <button data-cmd="ping" type="button">Ping</button>
+        <span id="cmd-result"></span>
+      </div>
+    </section>
+  </div>
+
+  <section id="mapview" hidden>
+    <header class="overlay-head">
+      <h2 id="mapview-title"></h2>
+      <span id="mapview-note"></span>
+      <button id="mapview-close" type="button">Zamknij</button>
+    </header>
+    <div id="map"></div>
+  </section>
+
+  <section id="portal" hidden>
+    <header class="overlay-head">
+      <h2 id="portal-title"></h2>
+      <a id="portal-open" target="_blank" rel="noopener">otwórz osobno</a>
+      <button id="portal-close" type="button">Zamknij</button>
+    </header>
+    <iframe id="portal-frame" title="Panel urządzenia" src="about:blank"></iframe>
+  </section>
+</main>
+
+<script src="/vendor/leaflet.js"
+        onerror="this.onerror=null;this.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'"></script>
+<script src="/app.js" defer></script>
+<script src="/admin.js" defer></script>
+</body>
+</html>

@@ -72,6 +72,7 @@ no voltage divider fitted.*
 | `firmware/probe-can/` | Standalone CAN probe: bit rate scan, per-ID table with a changed-byte mask, change log, CSV export. Listen-only |
 | `ha-integration/` | Custom component, superseded by MQTT discovery and kept as reference |
 | `hardware/` | Measurements, BOM, enclosure |
+| `hub/` | `tracker-hub`: fleet aggregator (MQTT to SQLite), fleet map, trip history, API, HA discovery. See `hub/README.md` |
 | `tools/` | Telemetry simulator for testing without hardware |
 
 ## Design decisions worth knowing
@@ -127,7 +128,8 @@ on their own.
 7. **Put authentication in front of the fleet page** before real cars / production.
    It is open by deliberate prototype choice today. Requirement and options
    (reverse-proxy Basic/OIDC or hub-native session): `docs/09-bezpieczenstwo.md`
-   §9.6. Implementation belongs in **`tracker-hub`**, not this repo.
+   §9.6. Admin mode (writes, device settings, commands) is already behind
+   Authentik in `hub/`; the read-only overview is still open.
 
 ## Conventions
 
