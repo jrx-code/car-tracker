@@ -20,9 +20,12 @@ inline int32_t daysFromCivil(int32_t y, uint32_t m, uint32_t d) {
 
 // UTC unix timestamp from calendar fields. Returns 0 for an implausible date,
 // so a receiver that has not got the time yet cannot stamp records with 1980.
+// The upper bound matters as much: an A7670 without network time reports
+// "70/01/01", which a two-digit year turns into 2070. Accepted as valid, that
+// made every certificate look expired and failed TLS over LTE (2026-10-08).
 inline uint32_t toUnixUtc(int year, int month, int day, int hour, int minute,
                           int second) {
-  if (year < 2020 || year > 2099 || month < 1 || month > 12 || day < 1 || day > 31) {
+  if (year < 2020 || year > 2060 || month < 1 || month > 12 || day < 1 || day > 31) {
     return 0;
   }
   const int64_t days = daysFromCivil(year, static_cast<uint32_t>(month),

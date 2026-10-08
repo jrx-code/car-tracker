@@ -15,6 +15,7 @@ void transportLteIdle();
 
 #include "config.h"
 #include "modem/cgnssinfo.h"
+#include "modem/broker_socket.h"
 #include "modem/transport.h"
 #include "pins.h"
 #include "power/power.h"
@@ -71,6 +72,18 @@ uint32_t nt_base = 0;
 uint32_t nt_at_ms = 0;
 uint32_t nt_tried_ms = 0;
 
+// Sets the modem clock over NTP, for networks that send no NITZ (or not yet).
+// Needs the data link; the module answers +CNTP: 0 once the clock is set.
+bool syncClockNtp() {
+  modem.sendAT(GF("+CNTP=\"pool.ntp.org\",0"));
+  if (modem.waitResponse(2000L) != 1) return false;
+  modem.sendAT(GF("+CNTP"));
+  if (modem.waitResponse(2000L) != 1) return false;
+  const bool ok = modem.waitResponse(15000L, GF("+CNTP: 0")) == 1;
+  Serial.printf("lte: NTP %s\n", ok ? "set the clock" : "failed");
+  return ok;
+}
+
 // Asks the modem every time; networkTime() is the cached front for it.
 uint32_t queryNetworkTime() {
   nt_tried_ms = millis();
@@ -121,6 +134,11 @@ bool powerUp() {
     if (modem.testAT(1000)) {
       powered = true;
       gnss_started = false;
+      // Network time (NITZ) updates the modem clock only with CTZU on, and it
+      // shipped off: the clock stayed at its 70/01/01 default (2026-10-08).
+      // The setting is kept across restarts; sending it again costs one AT.
+      modem.sendAT(GF("+CTZU=1"));
+      modem.waitResponse(1000L);
       Serial.printf("lte: modem up after %lu ms\n", millis() - t0);
       return true;
     }
@@ -149,7 +167,11 @@ void warnIfNoAnchor(const String& pem) {
 
 bool begin() {
   const settings::Settings& cfg = settings::get();
-  netClient.setClient(&tcp, true);
+  // SSL off here on purpose: TLS is started in openBrokerSocket(), see there.
+  netClient.setClient(&tcp, false);
+#if defined(ENABLE_DEBUG)
+  netClient.setDebugLevel(4);  // TLS diagnostics: build with -DENABLE_DEBUG
+#endif
   static String ca;
   ca = settings::caCert();
   if (!cfg.mqtt_verify_ca) {
@@ -185,7 +207,8 @@ bool connect(const char* client_id, const char* user, const char* pass,
       modem.simUnlock(cfg.sim_pin);
     }
 
-    if (!modem.waitForNetwork(60000L, true)) {
+    // Registration after a cold start took 66 s on Orange (2026-10-08).
+    if (!modem.waitForNetwork(120000L, true)) {
       Serial.printf("lte: no network, reg=%d csq=%d\n",
                     static_cast<int>(modem.getRegistrationStatus()),
                     static_cast<int>(modem.getSignalQuality()));
@@ -217,13 +240,17 @@ bool connect(const char* client_id, const char* user, const char* pass,
   // dates against it; hand it the network time instead (see transport_wifi).
   if (cfg.mqtt_verify_ca) {
     // Asked directly: a stale or missing cached time must not fail the handshake.
-    const uint32_t nt = queryNetworkTime();
+    uint32_t nt = queryNetworkTime();
+    if (nt == 0 && syncClockNtp()) nt = queryNetworkTime();
     if (nt == 0) {
       Serial.println("lte: no network time yet, TLS postponed");
       return false;
     }
     netClient.setX509Time(nt);
+    Serial.printf("lte: certificate check against network time %lu\n",
+                  static_cast<unsigned long>(nt));
   }
+  if (!openBrokerSocket(netClient, tcp)) return false;
   const bool ok = mqtt.connect(client_id, user, pass, lwt_topic, 1, true, lwt_payload);
   Serial.printf("lte: mqtt %s, state=%d\n", ok ? "connected" : "failed", mqtt.state());
   return ok;

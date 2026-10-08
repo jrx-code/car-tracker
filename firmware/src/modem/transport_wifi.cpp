@@ -9,6 +9,7 @@
 #include <time.h>
 
 #include "config.h"
+#include "modem/broker_socket.h"
 #include "modem/transport.h"
 #include "settings/settings.h"
 
@@ -107,7 +108,8 @@ bool begin() {
   const settings::Settings& cfg = settings::get();
   strncpy(link.net, "WIFI", sizeof(link.net) - 1);
   // The portal owns the WiFi join; this transport only opens the socket.
-  net.setClient(&tcp, true);
+  // SSL off here on purpose: TLS is started in openBrokerSocket(), see there.
+  net.setClient(&tcp, false);
 #if defined(ENABLE_DEBUG)
   net.setDebugLevel(4);  // TLS diagnostics: build with -DENABLE_DEBUG
 #endif
@@ -158,6 +160,7 @@ bool connect(const char* client_id, const char* user, const char* pass,
   // LWT is what turns an unplugged tracker into an unavailable entity in HA
   // within the keepalive window, instead of a frozen last position
   // (acceptance criterion 6 in docs/01).
+  if (!openBrokerSocket(net, tcp)) return false;
   return mqtt.connect(client_id, user, pass, lwt_topic, 1, true, lwt_payload);
 }
 
