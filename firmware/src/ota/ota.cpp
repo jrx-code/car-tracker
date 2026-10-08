@@ -63,15 +63,42 @@ bool hexToBytes(const char* hex, uint8_t* out, size_t n) {
   return true;
 }
 
+// The PEM text is the single source of the key (ota_release.sh compares it
+// with the signing key), but this core builds mbedtls without PEM parsing
+// (CONFIG_MBEDTLS_PEM_PARSE_C off), so every signature was "not valid"
+// (2026-10-08). The base64 body is decoded here and parsed as DER.
+size_t publicKeyDer(uint8_t* der, size_t der_len) {
+  char b64[160] = "";
+  size_t n = 0;
+  for (const char* line = kOtaPublicKeyPem; *line;) {
+    const char* end = strchr(line, '\n');
+    const size_t len = end ? static_cast<size_t>(end - line) : strlen(line);
+    if (len && line[0] != '-' && n + len < sizeof(b64)) {
+      memcpy(b64 + n, line, len);
+      n += len;
+    }
+    line += len + (end ? 1 : 0);
+  }
+  size_t out = 0;
+  if (mbedtls_base64_decode(der, der_len, &out, reinterpret_cast<unsigned char*>(b64), n) != 0) {
+    return 0;
+  }
+  return out;
+}
+
 bool signatureValid(const uint8_t hash[32], const uint8_t* sig, size_t sig_len) {
+  uint8_t der[128];
+  const size_t der_len = publicKeyDer(der, sizeof(der));
   mbedtls_pk_context pk;
   mbedtls_pk_init(&pk);
-  // PEM input must include the terminating NUL in the length.
-  int rc = mbedtls_pk_parse_public_key(
-      &pk, reinterpret_cast<const unsigned char*>(kOtaPublicKeyPem),
-      strlen(kOtaPublicKeyPem) + 1);
-  if (rc == 0) rc = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, 32, sig, sig_len);
+  int rc = der_len ? mbedtls_pk_parse_public_key(&pk, der, der_len) : -1;
+  const bool key_ok = rc == 0;
+  if (key_ok) rc = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, 32, sig, sig_len);
   mbedtls_pk_free(&pk);
+  if (rc != 0) {
+    Serial.printf("ota: %s failed, mbedtls -0x%04x\n", key_ok ? "verify" : "key parse",
+                  static_cast<unsigned>(-rc));
+  }
   return rc == 0;
 }
 
