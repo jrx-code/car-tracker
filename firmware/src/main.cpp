@@ -53,6 +53,11 @@ uint32_t last_tel_ms = 0;
 uint32_t mode_since_ms = 0;
 uint32_t voltage_low_since_ms = 0;
 uint32_t drive_hint_since_ms = 0;
+// GNSS-only mode detection (no divider, no accelerometer), see updateModeFromGnss().
+uint32_t gnss_sample_ms = 0;
+uint32_t gnss_slow_since_ms = 0;
+uint32_t gnss_nofix_since_ms = 0;
+uint8_t gnss_fast_samples = 0;
 bool warned_low_battery = false;
 PosRecord last_pos = {};
 bool have_last_pos = false;
@@ -119,6 +124,67 @@ void setMode(VehicleMode m, const char* event) {
   if (event) publishEvent(event);
 }
 
+void pumpModemGnss();
+
+// Neither a voltage divider nor an accelerometer: the PoC board on a power
+// bank. Without this the mode never left PARKED, so no track could ever be
+// recorded and PoC criterion 1 was out of reach (review 2026-10-08). Power is
+// no concern on a bank, so the receiver stays on and GNSS speed decides.
+// [DO ZMIERZENIA] thresholds: set from the first drive, not from data yet.
+constexpr float kGnssDriveKmh = 10.0f;      // two samples at or above: trip_start
+constexpr float kGnssStopKmh = 3.0f;        // below this counts as standing
+constexpr uint32_t kGnssStopMs = 180000UL;  // standing this long: trip_end
+constexpr uint32_t kGnssLostMs = 600000UL;  // no fix this long: trip_end too
+constexpr uint32_t kGnssSampleMs = 5000UL;  // sampling period while parked
+
+void updateModeFromGnss(uint32_t now) {
+  if (!gnss::enabled()) gnss::enable();
+  // While driving, the main loop pumps the modem receiver on every pass. While
+  // parked nothing else does, so sample here, at a pace: every CGNSSINFO is
+  // an AT round trip.
+  if (rtc_mode != MODE_DRIVING) {
+    if (now - gnss_sample_ms < kGnssSampleMs) return;
+    gnss_sample_ms = now;
+    pumpModemGnss();
+  }
+  PosRecord rec = {};
+  const bool fix = gnss::fill(rec, cfg.hdop_max);
+  const float kmh = rec.spd_ckmh / 100.0f;
+
+  if (rtc_mode == MODE_DRIVING) {
+    // A lost fix (tunnel, garage) is not a stop; only a long one ends the trip.
+    if (!fix) {
+      if (gnss_nofix_since_ms == 0) gnss_nofix_since_ms = now;
+      if (now - gnss_nofix_since_ms > kGnssLostMs) {
+        gnss_nofix_since_ms = gnss_slow_since_ms = 0;
+        setMode(MODE_PARKED, "trip_end");
+      }
+      return;
+    }
+    gnss_nofix_since_ms = 0;
+    if (kmh >= kGnssStopKmh) {
+      gnss_slow_since_ms = 0;
+    } else {
+      if (gnss_slow_since_ms == 0) gnss_slow_since_ms = now;
+      if (now - gnss_slow_since_ms > kGnssStopMs) {
+        gnss_slow_since_ms = 0;
+        setMode(MODE_PARKED, "trip_end");
+      }
+    }
+    return;
+  }
+
+  // Two samples in a row, so one noisy fix does not open a trip.
+  if (fix && kmh >= kGnssDriveKmh) {
+    if (++gnss_fast_samples >= 2) {
+      gnss_fast_samples = 0;
+      setMode(MODE_DRIVING, "trip_start");
+    }
+  } else {
+    gnss_fast_samples = 0;
+  }
+}
+
 // Two independent sources, because neither alone is reliable: voltage lies
 // during i-stop, the accelerometer lies when a door is slammed (docs/02 2.4).
 void updateMode(float vbat) {
@@ -130,6 +196,10 @@ void updateMode(float vbat) {
   // near-zero reading as a flat car battery would put the tracker into
   // hibernation within ten minutes of every power-up.
   const bool voltage_available = vbat > 1.0f;
+  if (!voltage_available && !motion::available()) {
+    updateModeFromGnss(now);
+    return;
+  }
   if (!voltage_available) {
     // Fall back to movement alone: drive when the accelerometer says so, park
     // when it has been still for two minutes.
@@ -208,10 +278,12 @@ void updateMode(float vbat) {
   }
 }
 
-uint16_t posIntervalMs() {
+// uint32_t: the settings are seconds in uint16_t, and anything above 65 s
+// overflowed a uint16_t millisecond result (int_drive=120 gave 54 s).
+uint32_t posIntervalMs() {
   switch (rtc_mode) {
-    case MODE_MOVED: return cfg.int_alarm * 1000;
-    case MODE_DRIVING: return cfg.int_drive * 1000;
+    case MODE_MOVED: return cfg.int_alarm * 1000UL;
+    case MODE_DRIVING: return cfg.int_drive * 1000UL;
     default: return 0;  // no positions while parked
   }
 }

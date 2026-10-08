@@ -72,6 +72,20 @@ uint32_t nt_base = 0;
 uint32_t nt_at_ms = 0;
 uint32_t nt_tried_ms = 0;
 
+// The first attach after boot failed with CREG 0 and CSQ 99 for the whole
+// wait while raw AT registered in 15-29 s (2026-10-08). Dump what decides
+// whether the radio even searches, so a failure in the field explains itself.
+void logModemState() {
+  for (const char* q : {"+CFUN?", "+CPIN?", "+CEREG?", "+COPS?", "+CPSI?", "+CGNSSPWR?"}) {
+    String r;
+    modem.sendAT(q);
+    modem.waitResponse(2000L, r);
+    r.replace("\r\n", " ");
+    r.trim();
+    Serial.printf("lte: AT%s -> %s\n", q, r.c_str());
+  }
+}
+
 // Sets the modem clock over NTP, for networks that send no NITZ (or not yet).
 // Needs the data link; the module answers +CNTP: 0 once the clock is set.
 bool syncClockNtp() {
@@ -124,6 +138,12 @@ bool powerUp() {
   if (powered) return true;
   // The rail is switched, not just the chip, so this is a cold start every time
   // we come back from PARKED. That is the deliberate trade in docs/04.
+  // RESET is active HIGH on the LilyGO and nothing drove it, so the line was
+  // left to the ESP32 strapping pull-up on GPIO 5. Hold it released.
+  if (PIN_MODEM_RESET >= 0) {
+    pinMode(PIN_MODEM_RESET, OUTPUT);
+    digitalWrite(PIN_MODEM_RESET, LOW);
+  }
   power::modemPower(true);
   delay(200);
   atSerial.begin(MODEM_BAUD, SERIAL_8N1, PIN_MODEM_RX, PIN_MODEM_TX);
@@ -212,6 +232,7 @@ bool connect(const char* client_id, const char* user, const char* pass,
       Serial.printf("lte: no network, reg=%d csq=%d\n",
                     static_cast<int>(modem.getRegistrationStatus()),
                     static_cast<int>(modem.getSignalQuality()));
+      logModemState();
       return false;
     }
     if (!modem.gprsConnect(cfg.apn, cfg.apn_user, cfg.apn_pass) ||
@@ -327,7 +348,21 @@ bool modemGnssFix(double& lat, double& lon, float& speed_kmh, float& course,
   modem.waitResponse();
 
   cgnss::Fix fix;
-  if (!cgnss::parse(line.c_str(), fix)) return false;
+  if (!cgnss::parse(line.c_str(), fix)) {
+    // The empty no-fix line is ",,,,,,,,..."; anything carrying digits that
+    // the parser still rejects is a format question (docs/07), so log it.
+    if (strpbrk(line.c_str(), "123456789")) {
+      Serial.printf("gnss: CGNSSINFO not parsed: %s\n", line.c_str());
+    }
+    return false;
+  }
+  // The format with a real fix was never seen before the field test; keep the
+  // first good line of every boot in the log to check the parser against it.
+  static bool logged_first_fix = false;
+  if (!logged_first_fix) {
+    logged_first_fix = true;
+    Serial.printf("gnss: first fix line: %s\n", line.c_str());
+  }
   lat = fix.lat;
   lon = fix.lon;
   speed_kmh = fix.speed_kmh;

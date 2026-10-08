@@ -10,6 +10,9 @@ namespace motion {
 // sensitivity 1..5, maps to the INT1 threshold register (higher = more sensitive)
 bool begin(uint8_t sensitivity);
 
+// False when begin() found no LIS3DH on the bus (not fitted yet on the PoC board).
+bool available();
+
 // Reconfigure the threshold without a full re-init (arrives from the cfg topic).
 void setSensitivity(uint8_t sensitivity);
 

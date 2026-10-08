@@ -29,3 +29,4 @@ hardware/backup/
 hub/.pytest_cache/
 hub/*.db
 hub/web/vendor/
+.field-logs/

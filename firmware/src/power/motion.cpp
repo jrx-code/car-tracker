@@ -121,6 +121,8 @@ float magnitude() {
   return sqrtf(g[0] * g[0] + g[1] * g[1] + g[2] * g[2]);
 }
 
+bool available() { return present; }
+
 bool sustainedMotion(uint32_t hold_ms) {
   if (!present) return false;
   const bool now = interruptActive() || readAndClear();

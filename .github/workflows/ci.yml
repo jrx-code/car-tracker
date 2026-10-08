@@ -72,6 +72,11 @@ jobs:
       - name: Install PlatformIO
         run: pip install -U platformio
 
+      - name: Host tests (security rules in plain C++)
+        run: |
+          g++ -std=c++17 -Wall -Werror -I firmware/src firmware/test/host/test_hostcheck.cpp -o /tmp/test_hostcheck
+          /tmp/test_hostcheck
+
       - name: Provide compile-time config.h
         # config.h is gitignored; example placeholders are enough to compile.
         run: cp firmware/src/config.example.h firmware/src/config.h
