@@ -350,7 +350,17 @@ class Ingest:
             self.dropped += 1
             return False
 
-        ts = float(pos.get("ts") or 0) or time.time()
+        ts = float(pos.get("ts") or 0)
+        if not ts:
+            # A live point without a timestamp is close to "now"; one replayed
+            # from the offline queue is not, and stamping it with the arrival
+            # time would move it hours and feed the teleport guard a lie.
+            if historic:
+                _LOG.warning("%s: backlog point seq=%s has no timestamp, dropped",
+                             vehicle_id, pos.get("seq"))
+                self.dropped += 1
+                return False
+            ts = time.time()
         pos["ts"] = ts
 
         with self._lock:

@@ -133,6 +133,26 @@ def test_batch_is_ordered_and_deduplicated(hub):
     assert stored == sorted(stored, key=lambda p: p["ts"])
 
 
+def test_backlog_point_without_timestamp_is_dropped_not_restamped(hub):
+    """Criterion 2 of the PoC: backlog points keep their original time or go."""
+    ingest, store = hub
+    old = time.time() - 3600
+    good = json.loads(pos_payload(200, 53.40, 14.50, old))
+    blind = json.loads(pos_payload(201, 53.401, 14.50, 0))
+    batch = json.dumps({"n": 2, "pts": [good, blind]}).encode()
+    ingest._handle("cartracker/nd1/batch", batch)
+
+    stored = store.positions("nd1", since=0)
+    assert [p["seq"] for p in stored] == [200]
+    assert stored[0]["ts"] == pytest.approx(old)
+
+
+def test_live_point_without_timestamp_gets_arrival_time(hub):
+    ingest, store = hub
+    ingest._handle("cartracker/nd1/pos", pos_payload(1, 53.40, 14.50, 0))
+    assert store.last_position("nd1")["ts"] == pytest.approx(time.time(), abs=5)
+
+
 def test_status_and_telemetry_update_the_vehicle(hub):
     ingest, store = hub
     ingest._handle("cartracker/nd3/status", b"online")
