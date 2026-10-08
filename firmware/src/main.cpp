@@ -389,7 +389,11 @@ void handleCommand(const uint8_t* payload, unsigned len) {
       rec.mode = rtc_mode;
       sendOrQueue(rec);
     }
-    packet::buildAck(id, got, millis() - t0, got ? "" : "no fix", buf, sizeof(buf));
+    // On failure say what the receiver last answered: an empty line means it is
+    // still searching, anything with digits is a fix the parser did not take.
+    char msg[128] = "";
+    if (!got) snprintf(msg, sizeof(msg), "no fix; CGNSSINFO: %s", transport::lastGnssLine());
+    packet::buildAck(id, got, millis() - t0, msg, buf, sizeof(buf));
     transport::publish(t_ack, buf, false);
   } else if (strcmp(cmd, "reboot") == 0) {
     packet::buildAck(id, true, millis() - t0, "rebooting", buf, sizeof(buf));

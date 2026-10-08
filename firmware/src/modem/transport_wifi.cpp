@@ -197,6 +197,9 @@ uint32_t networkTime() {
   return (now > 1700000000) ? static_cast<uint32_t>(now) : 0;
 }
 
+char last_gnss_line[100] = "";
+const char* lastGnssLine() { return last_gnss_line; }
+
 #if MODEM_HAS_GNSS
 bool modemGnssFix(double& lat, double& lon, float& speed_kmh, float& course,
                   float& alt, int& sats, float& hdop, uint32_t& utc_ts) {
@@ -208,8 +211,13 @@ bool modemGnssFix(double& lat, double& lon, float& speed_kmh, float& course,
   const String reply = atCmd("AT+CGNSSINFO", 1000);
   const int at_line = reply.indexOf("+CGNSSINFO:");
   if (at_line < 0) return false;
+  const char* line = reply.c_str() + at_line + strlen("+CGNSSINFO:");
+  while (*line == ' ') line++;
+  strncpy(last_gnss_line, line, sizeof(last_gnss_line) - 1);
+  last_gnss_line[sizeof(last_gnss_line) - 1] = '\0';
+  last_gnss_line[strcspn(last_gnss_line, "\r\n")] = '\0';
   cgnss::Fix fix;
-  if (!cgnss::parse(reply.c_str() + at_line + strlen("+CGNSSINFO:"), fix)) return false;
+  if (!cgnss::parse(line, fix)) return false;
   lat = fix.lat;
   lon = fix.lon;
   speed_kmh = fix.speed_kmh;

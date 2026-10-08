@@ -10,8 +10,9 @@
 // taken as fixed: the fields after the satellite counts are lat, N/S, lon,
 // E/W, date ddmmyy, time hhmmss.s, alt, speed, course, and the line ends with
 // PDOP, HDOP, VDOP. Speed is treated as knots, as in the SIMCom manual.
-// [TO VERIFY with a real fix on A7670M7_B09V01_250619: field count, lat format
-//  and the speed unit. As of 2026-09-28 only the no-fix line was observed.]
+// Published fix lines (SIMCom manual, field reports) end with a "satellites
+// used" count after VDOP; test/host/test_cgnssinfo.cpp holds them.
+// [TO VERIFY with a real fix from our A7670: lat format and the speed unit.]
 #pragma once
 
 #include <cmath>
@@ -62,35 +63,46 @@ inline bool parse(const char* line, Fix& out) {
   const int mode = f[0][0] ? atoi(f[0]) : 0;
   if (mode < 2) return false;
 
-  // 1 mode + S satellite counts + 9 position fields + 3 DOP fields, with S
-  // being 3 or 4. Anything else is a layout this parser does not know.
-  int svs;
-  if (n == 1 + 3 + 9 + 3) {
-    svs = 3;
-  } else if (n == 1 + 4 + 9 + 3) {
-    svs = 4;
-  } else {
-    return false;
+  // The layout is found from the latitude hemisphere instead of from the total
+  // field count: the number of per-system satellite counts varies (3 or 4) and
+  // newer firmware appends "satellites used" after VDOP. The first parser
+  // required exactly 16 or 17 fields and so rejected every real fix line,
+  // which has 18 (2026-10-08). From the N/S field k the order is fixed:
+  // lat k-1, N/S k, lon k+1, E/W k+2, date k+3, time k+4, alt k+5,
+  // speed k+6, course k+7, PDOP k+8, HDOP k+9, VDOP k+10, [used k+11].
+  int k = -1;
+  for (int i = 2; i < n; i++) {
+    if ((f[i][0] == 'N' || f[i][0] == 'S') && f[i][1] == '\0') {
+      k = i;
+      break;
+    }
   }
+  if (k < 0 || n < k + 11) return false;
+  const int svs = k - 2;  // fields 1..k-2 are the per-system counts
+  if (svs < 3 || svs > 4) return false;
+  if (!f[k - 1][0] || !f[k + 1][0]) return false;
+  if (f[k + 2][0] != 'E' && f[k + 2][0] != 'W') return false;
 
   int sats = 0;
-  for (int i = 1; i <= svs; i++) sats += atoi(f[i]);
+  if (n > k + 11 && f[k + 11][0]) {
+    sats = atoi(f[k + 11]);
+  } else {
+    for (int i = 1; i <= svs; i++) sats += atoi(f[i]);
+  }
 
-  const int b = 1 + svs;
-  if (!f[b][0] || !f[b + 2][0]) return false;
-  double lat = atof(f[b]);
-  double lon = atof(f[b + 2]);
+  double lat = atof(f[k - 1]);
+  double lon = atof(f[k + 1]);
   // A latitude of 100 or more can only be ddmm; decimal degrees stop at 90.
   // Below 1 degree the two formats coincide in magnitude, irrelevant here.
   if (std::fabs(lat) >= 100.0) {
     lat = ddmmToDeg(lat);
     lon = ddmmToDeg(lon);
   }
-  if (f[b + 1][0] == 'S') lat = -lat;
-  if (f[b + 3][0] == 'W') lon = -lon;
+  if (f[k][0] == 'S') lat = -lat;
+  if (f[k + 2][0] == 'W') lon = -lon;
 
-  const char* date = f[b + 4];  // ddmmyy
-  const char* tim = f[b + 5];   // hhmmss.s
+  const char* date = f[k + 3];  // ddmmyy
+  const char* tim = f[k + 4];   // hhmmss.s
   uint32_t ts = 0;
   if (strlen(date) >= 6 && strlen(tim) >= 6) {
     auto two = [](const char* s) { return (s[0] - '0') * 10 + (s[1] - '0'); };
@@ -100,10 +112,10 @@ inline bool parse(const char* line, Fix& out) {
 
   out.lat = lat;
   out.lon = lon;
-  out.alt = static_cast<float>(atof(f[b + 6]));
-  out.speed_kmh = static_cast<float>(atof(f[b + 7]) * 1.852);
-  out.course = static_cast<float>(atof(f[b + 8]));
-  out.hdop = f[n - 2][0] ? static_cast<float>(atof(f[n - 2])) : 99.0f;
+  out.alt = static_cast<float>(atof(f[k + 5]));
+  out.speed_kmh = static_cast<float>(atof(f[k + 6]) * 1.852);
+  out.course = static_cast<float>(atof(f[k + 7]));
+  out.hdop = f[k + 9][0] ? static_cast<float>(atof(f[k + 9])) : 99.0f;
   out.sats = sats;
   out.utc_ts = ts;
   return true;

@@ -54,4 +54,9 @@ uint32_t networkTime();
 bool modemGnssFix(double& lat, double& lon, float& speed_kmh, float& course,
                   float& alt, int& sats, float& hdop, uint32_t& utc_ts);
 
+// Last raw +CGNSSINFO reply (after the prefix), "" before the first one. Sent
+// back with a failed locate, so "no fix" can be told apart from a line the
+// parser rejected without a serial cable (a field test on 2026-10-08 could not).
+const char* lastGnssLine();
+
 }  // namespace transport

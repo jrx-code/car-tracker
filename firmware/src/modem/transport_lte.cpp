@@ -329,6 +329,18 @@ uint32_t networkTime() {
   return nt_base ? nt_base + (millis() - nt_at_ms) / 1000UL : 0;
 }
 
+namespace {
+char last_gnss_line[100] = "";
+void rememberGnssLine(const char* line) {
+  while (*line == ' ') line++;
+  strncpy(last_gnss_line, line, sizeof(last_gnss_line) - 1);
+  last_gnss_line[sizeof(last_gnss_line) - 1] = '\0';
+  last_gnss_line[strcspn(last_gnss_line, "\r\n")] = '\0';
+}
+}  // namespace
+
+const char* lastGnssLine() { return last_gnss_line; }
+
 bool modemGnssFix(double& lat, double& lon, float& speed_kmh, float& course,
                   float& alt, int& sats, float& hdop, uint32_t& utc_ts) {
 #if MODEM_HAS_GNSS && defined(TINY_GSM_MODEM_A7672X)
@@ -345,6 +357,7 @@ bool modemGnssFix(double& lat, double& lon, float& speed_kmh, float& course,
   modem.sendAT(GF("+CGNSSINFO"));
   if (modem.waitResponse(2000L, GF("+CGNSSINFO:")) != 1) return false;
   const String line = atSerial.readStringUntil('\n');
+  rememberGnssLine(line.c_str());
   modem.waitResponse();
 
   cgnss::Fix fix;

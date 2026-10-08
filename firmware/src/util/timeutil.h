@@ -3,7 +3,7 @@
 // only ever deals in UTC: NMEA and the network clock are both UTC, and mixing a
 // timezone in here would shift every timestamp in the history by whole hours.
 #pragma once
-#include <Arduino.h>
+#include <cstdint>  // plain C++: host tests include this through cgnssinfo.h
 
 namespace timeutil {
 
