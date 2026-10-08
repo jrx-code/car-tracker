@@ -114,8 +114,8 @@ przyjmie i AP wstałby po cichu jako sieć otwarta.
 |---|---|
 | `mqtt_host`, `mqtt_port` | broker |
 | `mqtt_user`, `mqtt_pass` | konto per pojazd |
-| `mqtt_tls` | szyfrowanie |
-| `mqtt_verify_ca` | weryfikacja certyfikatu brokera |
+| `mqtt_tls` | szyfrowanie; wyłączone tylko do brokera w sieci lokalnej (09, 9.3) |
+| `mqtt_verify_ca` | weryfikacja certyfikatu brokera; wyłączona tylko jak wyżej |
 | `topic_prefix` | domyślnie `cartracker` |
 | `mqtt_keepalive` | wpływa na to, jak szybko HA zobaczy `offline` z LWT |
 | certyfikat CA | wklejany jako PEM, trzymany w LittleFS |

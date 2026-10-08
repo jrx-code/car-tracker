@@ -47,6 +47,34 @@ sufiks modułu (FASE ma, LASE nie ma). Płytka LilyGO kupiona do projektu ma
   Do czasu własnego dzielnika z OBD `PIN_VBAT_ADC` jest -1 (ścieżka „bez dzielnika").
 - **TLS czeka na zegar.** BearSSL sprawdza daty certyfikatu względem `time()`;
   przed NTP to 1970. WiFi czeka na NTP, LTE podaje czas z sieci przez `setX509Time`.
+- **Zegar modemu bywa w roku 2070** (2026-10-08). A7670 bez czasu z sieci podaje
+  `70/01/01`, co dwucyfrowy rok zamienia na 2070, a `toUnixUtc` przyjmował lata do
+  2099. Certyfikat brokera wyglądał na wygasły i uzgadnianie kończyło się bez alertu.
+  Aktualizacja czasu z sieci (`AT+CTZU`) była wyłączona fabrycznie. Teraz: `CTZU=1`
+  przy włączeniu modemu, zapasowo NTP w modemie (`AT+CNTP`), lata poza 2020-2060
+  są odrzucane.
+- **TLS zawsze jawnie** (2026-10-08). `ESP_SSLClient::connect()` robi TLS tylko dla
+  portów z wbudowanej listy (443, 8883, ...) i na każdy inny port wysyła tekst
+  jawny, bez błędu. Na brokerze na porcie spoza listy hasło MQTT poszło otwartym
+  tekstem. Klient jest teraz tworzony z wyłączonym SSL, a `openBrokerSocket()`
+  w `modem/broker_socket.h` sam robi `connectSSL()`, gdy `mqtt_tls` jest włączone,
+  i zamyka gniazdo przy nieudanym uzgadnianiu, zanim PubSubClient wyśle bajt.
+- **TinyGSM 0.12 nie otwiera zwykłego gniazda na A7670.** Wysyła `CTCPKA` przed
+  `NETOPEN` (pierwsze daje ERROR przed otwarciem sieci, drugie po), a po `CIPSEND`
+  czeka na `+CCHSEND`, które zgłasza tylko gniazdo SSL modemu. Łata nakładana przed
+  buildem: `scripts/patch_tinygsm_a7672x.py`; build pada, jeśli łatany kod się
+  zmieni.
+- **Pin RESET modemu** (GPIO 5, aktywny stanem wysokim, pin konfiguracyjny ESP32)
+  nie był niczym sterowany. Pierwsza rejestracja po starcie płytki padała 4 razy
+  na 4 (`CREG 0`, `CSQ 99` przez całe oczekiwanie), surowe AT rejestrowało się
+  w 15-29 s. RESET jest teraz trzymany nisko przy włączaniu; skutek
+  `[DO ZMIERZENIA]`, jedna próba w terenie: online 31 s po starcie. Przy
+  nieudanej rejestracji firmware wypisuje `CFUN`, `CPIN`, `CEREG`, `COPS`, `CPSI`
+  i `CGNSSPWR`.
+- **Bez dzielnika i bez akcelerometru tryb decyduje GNSS.** Inaczej płytka z PoC
+  na powerbanku zostawała w PARKED i nigdy nie zapisywała śladu. Odbiornik pracuje
+  stale, dwa odczyty >= 10 km/h otwierają przejazd, < 3 km/h przez 3 min albo brak
+  fixu przez 10 min go zamykają. Progi `[DO ZMIERZENIA]`.
 - **Certyfikat do portalu wysyłać jako `text/plain`.** Wysłany jako formularz
   (domyślny `curl --data-binary`) zamienia `+` na spacje, zapisuje się bez błędu
   i daje zero kotwic. Portal teraz odrzuca taki PEM.
@@ -71,7 +99,7 @@ sufiks modułu (FASE ma, LASE nie ma). Płytka LilyGO kupiona do projektu ma
 | `bblanchon/ArduinoJson` | pakiety, patrz 05 |
 | `mikalhart/TinyGPSPlus` | NMEA z NEO-6M |
 | `mobizt/ESP_SSLClient` | TLS |
-| `vshymanskyy/TinyGSM` | modem, tylko w środowiskach LTE |
+| `vshymanskyy/TinyGSM` | modem, tylko w środowiskach LTE; dla A7672X łatany przed buildem (7.1) |
 
 TLS **nie** idzie przez `WiFiClientSecure`. Arduino core 3.3.9 w tej platformie
 nie dostarcza biblioteki `NetworkClientSecure` ani nagłówka `WiFiClientSecure.h`

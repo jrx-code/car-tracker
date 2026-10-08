@@ -9,7 +9,7 @@ konsekwencjach przy wycieku, a nie czujnik temperatury.
 | Zagrożenie | Skutek | Środek zaradczy |
 |---|---|---|
 | Kradzież urządzenia z auta razem z SIM | Obcy ma dane logowania do brokera | Poświadczenia per pojazd, natychmiastowa blokada w EMQX, ACL ograniczone do własnego prefiksu tematów |
-| Podsłuch transmisji | Ujawnienie trasy | TLS do brokera, brak trybu bez TLS w firmware release |
+| Podsłuch transmisji | Ujawnienie trasy i hasła MQTT | TLS do brokera; tekst jawny i TLS bez weryfikacji certyfikatu tylko do brokera w sieci lokalnej (9.3) |
 | Podszycie się pod tracker | Fałszywe pozycje w HA | Uwierzytelnienie klienta, unikalny `client_id`, ACL na zapis tylko do własnego prefiksu |
 | Przejęcie brokera | Historia tras obu aut | Broker jest lokalny, nie w cudzej chmurze. Retencja historii ograniczona, patrz 9.4 |
 | Ktoś podszywa się pod HA i wysyła `cmd` | Zdalny restart, wyciek pozycji przez `locate` | ACL: zapis na `cmd` i `cfg` tylko dla użytkownika HA. `ota` wyłączone poza WiFi |
@@ -43,6 +43,33 @@ i podlega aktualizacji przez OTA.
 **Uwaga z doświadczenia domowego:** broker musi podawać łańcuch RSA. Klienci
 osadzeni potrafią nie obsłużyć certyfikatu ECDSA i wtedy TLS nie wstaje bez czytelnego
 błędu. To trzeba potwierdzić na bench przed montażem w aucie.
+
+**Incydent 2026-10-08: hasło MQTT otwartym tekstem.** Przy pierwszym połączeniu
+po LTE broker słuchał na porcie spoza wbudowanej listy `ESP_SSLClient`, a ta
+biblioteka dla takiego portu po cichu pomija TLS. Kilka ramek CONNECT z hasłem
+przeszło przez internet jawnie, zanim zrzut ruchu to pokazał. Przekierowanie
+zostało wyłączone, hasło konta zmienione, firmware poprawiony (07, 7.1). Wnioski,
+które teraz są regułą:
+
+- TLS jest uruchamiany jawnie i nie zależy od numeru portu; nieudane uzgadnianie
+  zamyka połączenie przed wysłaniem czegokolwiek.
+- Tekst jawny albo TLS bez weryfikacji certyfikatu są dozwolone tylko do brokera,
+  który nie może być w internecie: prywatny adres IPv4 albo nazwa `.local`,
+  `.lan`, `.home.arpa` (`util/hostcheck.h`). Portal pozwala te opcje ustawić,
+  połączenie je odrzuca. CI uruchamia test tej reguły na hoście
+  (`firmware/test/host`).
+- Każda zmiana ścieżki połączenia jest sprawdzana zrzutem ruchu: pierwszy bajt
+  od urządzenia ma być rekordem TLS (`0x16`), nie ramką MQTT (`0x10`).
+
+**Broker widoczny z internetu.** Trackery na LTE łączą się z brokerem domowym przez
+osobny listener TLS na niestandardowym porcie, przekierowany na routerze. Ten sam
+broker obsługuje resztę domu, więc granica jest w ACL: klient z publicznego adresu
+IPv4 może używać tylko kont `cartracker-*` i tylko gałęzi `cartracker/#`. Działa to
+dlatego, że przekierowanie zachowuje adres źródłowy (sprawdzone na sesjach z LTE).
+Przegląd alternatyw (Tailscale na urządzeniu, WireGuard przez PPP, Cloudflare
+Tunnel z MQTT po WebSocket) zakończył się tym wyborem: zero zmian w kliencie,
+TLS od urządzenia do brokera bez pośrednika, najkrótsze połączenie przy każdym
+wybudzeniu.
 
 ## 9.4 Prywatność i retencja
 
