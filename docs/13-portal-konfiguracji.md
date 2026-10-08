@@ -156,7 +156,7 @@ start) oraz wartości spoza 0-39. RX i TX GNSS nie mogą być tym samym pinem.
 |---|---|
 | `admin_pass` | hasło do zapisu, nie do odczytu |
 | `portal_enabled` | całkowite wyłączenie serwera |
-| `ota_enabled` | aktualizacja przez sieć |
+| `ota_enabled` | aktualizacja przez sieć (07, 7.7); wyłączone = komenda `ota` odrzucana |
 
 Akcje: restart, ustawienia fabryczne (z potwierdzeniem), ręczne podniesienie AP.
 

@@ -109,6 +109,7 @@ or `API_TOKEN`; an empty token does **not** open writes.
 | GET | `/api/trips/<id>` | trip with its full track |
 | POST | `/api/vehicles/<id>/command` | `{"cmd": "locate"\|"ping"\|"reboot"}` |
 | POST | `/api/vehicles/<id>/config` | retained `cfg` to the device |
+| POST | `/api/vehicles/<id>/ota` | signed firmware image (raw body, `X-Firmware-Signature`), sent to the device over MQTT; see `../docs/07-firmware.md` 7.7 |
 
 POSTs need admin mode or the `X-Api-Token` header matching `API_TOKEN`.
 

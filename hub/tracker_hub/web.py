@@ -20,6 +20,7 @@ from urllib.request import Request, urlopen
 
 from .config import Config
 from .ingest import Ingest
+from .ota import DEFAULT_CHUNK, MAX_IMAGE, OtaError
 from .store import Store
 
 _LOG = logging.getLogger(__name__)
@@ -247,6 +248,11 @@ class Handler(BaseHTTPRequestHandler):
             self._send_error_json(403, "admin mode or X-Api-Token required")
             return
 
+        # Firmware upload: a raw image body, not JSON, so it is routed first.
+        if len(parts) == 4 and parts[1] == "vehicles" and parts[3] == "ota":
+            self._post_ota(parts[2])
+            return
+
         raw = self._read_body() or b"{}"
         try:
             body = json.loads(raw or b"{}")
@@ -362,6 +368,30 @@ class Handler(BaseHTTPRequestHandler):
         _LOG.info("command %s -> %s: %s", command, vehicle_id, "sent" if ok else "failed")
         self._send_json({"sent": ok, "cmd": command, "vehicle_id": vehicle_id})
 
+    def _post_ota(self, vehicle_id: str) -> None:
+        """Stage a signed image and tell the vehicle to fetch it over MQTT.
+
+        Body: the raw firmware.bin. Header X-Firmware-Signature: base64 DER
+        ECDSA P-256 over its SHA-256 (firmware/scripts/ota_release.sh).
+        """
+        length = int(self.headers.get("Content-Length") or 0)
+        if not 0 < length <= MAX_IMAGE:
+            self._send_error_json(413, f"image must be 1..{MAX_IMAGE} bytes")
+            return
+        image = self.rfile.read(length)
+        if self.store.vehicle(vehicle_id) is None:
+            self._send_error_json(404, f"unknown vehicle {vehicle_id}")
+            return
+        try:
+            chunk = int(self._query().get("chunk", [DEFAULT_CHUNK])[0])
+            result = self.ingest.ota.stage(
+                vehicle_id, image, self.headers.get("X-Firmware-Signature", ""), chunk)
+        except (OtaError, ValueError) as exc:
+            self._send_error_json(400, str(exc))
+            return
+        _LOG.info("ota %s by %s: %d bytes", vehicle_id, self._admin() or "api token", length)
+        self._send_json(result)
+
     def _post_config(self, vehicle_id: str, body: dict[str, Any]) -> None:
         if not isinstance(body, dict) or not body:
             self._send_error_json(400, "config must be a non-empty object")
@@ -421,6 +451,7 @@ class Handler(BaseHTTPRequestHandler):
             "vehicle": vehicle,
             "info": self.ingest.last_info.get(vehicle_id),
             "cfg": self.ingest.last_cfg.get(vehicle_id),
+            "ota": self.ingest.ota.status(vehicle_id),
             "acks": list(self.ingest.acks.get(vehicle_id, [])),
             "settings": settings,
             "settings_error": error,

@@ -177,3 +177,38 @@ a ADC w ESP32 jest nieliniowy.
 Nie liczy przejazdów, dystansu ani geofence. To jest w HA i tam się to poprawia
 bez wyjmowania urządzenia z auta. Wyjątek: alarm ruchu na postoju, bo musi
 zadziałać także wtedy, gdy HA nie działa.
+
+## 7.7 Aktualizacja przez sieć (OTA)
+
+Obraz idzie tą samą sesją MQTT po TLS, którą tracker już ma, po LTE albo po WiFi.
+Nie ma osobnego portu ani hosta do pobierania: broker jest jedyną rzeczą
+osiągalną z sieci operatora, więc hub wysyła obraz kawałkami przez niego.
+
+1. `scripts/ota_release.sh <env> <pojazd>` buduje obraz, podpisuje skrót SHA-256
+   kluczem ECDSA P-256 (klucz prywatny poza repo) i wysyła go do huba
+   (`POST /api/vehicles/<id>/ota`, nagłówek `X-Firmware-Signature`). Skrypt odmawia
+   przy niezacommitowanych zmianach, bo `fw` w pakiecie `info` to hash commita,
+   i przy kluczu niezgodnym z `src/ota/ota_pubkey.h`.
+2. Hub zapisuje obraz i wysyła komendę `ota` z rozmiarem, skrótem i podpisem.
+3. Tracker przyjmuje ją tylko na postoju (nigdy w trybie DRIVING ani MOVED),
+   przy `ota_enabled` i gdy obraz mieści się w slocie. **Podpis sprawdza przed
+   pobraniem pierwszego bajtu.** Sama suma by nie wystarczyła: każde konto
+   `cartracker-*` może publikować w całym `cartracker/#`.
+4. Tracker prosi o kolejne kawałki (`ota/req` z offsetem), hub odpowiada na
+   `ota/data` (4 bajty offsetu little-endian plus dane). Kawałek z innym offsetem
+   jest ignorowany, brakujący zamawiany ponownie (4 próby po 15 s).
+5. Zapis idzie do nieaktywnego slotu OTA. Przerwane pobieranie zostawia działający
+   firmware nietknięty. Po komplecie tracker porównuje skrót z podpisanym,
+   `Update.end()` sprawdza nagłówek obrazu i przełącza slot startowy.
+6. **Próbny start.** Bootloader w tym rdzeniu nie ma rollbacku
+   (`CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE` wyłączone), więc pilnuje tego firmware:
+   nowy obraz musi połączyć się z brokerem w 10 minut i nie restartować się więcej
+   niż 3 razy, inaczej `Update.rollBack()` wraca do poprzedniego slotu. Udany
+   start wysyła zdarzenie `ota_confirmed`.
+
+Postęp i wynik przychodzą jako `ack` na komendę `ota`; nieudane `locate` podaje
+ostatnią surową linię `+CGNSSINFO`. `TINY_GSM_RX_BUFFER` podniesiony do 1024:
+z domyślnym 64 każdy rekord TLS to kilkadziesiąt wymian AT z modemem.
+
+`[DO ZMIERZENIA]` czas przesłania obrazu ~0,9 MB po LTE i zużycie danych; całość
+nie była jeszcze uruchomiona na płytce. Pierwsze wgranie z OTA idzie przez USB.

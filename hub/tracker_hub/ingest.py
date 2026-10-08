@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import math
+import os
 import ssl
 import threading
 import time
@@ -23,6 +24,7 @@ import paho.mqtt.client as mqtt
 
 from .config import Config
 from .discovery import Discovery
+from .ota import OtaServer
 from .store import Store
 
 _LOG = logging.getLogger(__name__)
@@ -106,6 +108,12 @@ class Ingest:
 
         self.discovery = Discovery(self._raw_publish, cfg.topic_prefix,
                                    cfg.discovery_prefix)
+        # Images live next to the database: the systemd unit lets the service
+        # write there and nowhere else.
+        self.ota = OtaServer(
+            os.path.join(os.path.dirname(cfg.db_path) or ".", "firmware"),
+            cfg.topic_prefix, self._publish_bytes, self.publish_command,
+        )
 
     # --- lifecycle --------------------------------------------------------
 
@@ -119,6 +127,11 @@ class Ingest:
 
     def _raw_publish(self, topic: str, payload: str, retain: bool = False) -> None:
         self._client.publish(topic, payload, qos=1, retain=retain)
+
+    def _publish_bytes(self, topic: str, payload: bytes) -> None:
+        # QoS 0: the device asks again for a chunk that does not arrive, so a
+        # broker-level retry would only duplicate it.
+        self._client.publish(topic, payload, qos=0, retain=False)
 
     def announce_all(self, force: bool = False) -> int:
         """Re-announce every known vehicle. Called on connect."""
@@ -215,6 +228,14 @@ class Ingest:
 
         if kind == "status":
             self._on_status(vehicle_id, payload)
+            return
+        if kind == "ota":
+            # ota/data is binary and is our own publish echoed back; only the
+            # device's ota/req is for us.
+            if len(parts) > 3 and parts[3] == "req":
+                req = self._decode(topic, payload)
+                if req is not None:
+                    self.ota.on_request(vehicle_id, req)
             return
 
         data = self._decode(topic, payload)

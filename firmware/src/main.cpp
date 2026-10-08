@@ -8,6 +8,7 @@
 #include "config.h"
 #include "gnss/gnss.h"
 #include "modem/transport.h"
+#include "ota/ota.h"
 #include "pins.h"
 #include "portal/portal.h"
 #include "power/motion.h"
@@ -19,7 +20,14 @@
 
 namespace {
 
-constexpr const char* kFwVersion = "0.1.0";
+// FW_GIT is the short commit hash, set by platformio.ini at build time, so the
+// info packet says which build runs: after an OTA that is the only proof.
+#ifndef FW_GIT
+#define FW_GIT dev
+#endif
+#define FW_STR2(x) #x
+#define FW_STR(x) FW_STR2(x)
+constexpr const char* kFwVersion = "0.1.0+" FW_STR(FW_GIT);
 
 #if defined(MODEM_PROFILE_SIM7670G)
 constexpr const char* kModemName = "SIM7670G";
@@ -45,7 +53,7 @@ Telemetry tel;
 char vehicle_id[12] = DEFAULT_VEHICLE_ID;
 
 char t_status[48], t_info[48], t_pos[48], t_tel[48], t_evt[48], t_batch[48];
-char t_cfg[48], t_cmd[48], t_ack[48];
+char t_cfg[48], t_cmd[48], t_ack[48], t_ota_req[48], t_ota_data[48];
 char buf[2048];
 
 uint32_t last_pos_ms = 0;
@@ -73,6 +81,8 @@ void buildTopics() {
   snprintf(t_cfg, sizeof(t_cfg), "%s/%s/cfg", prefix, vehicle_id);
   snprintf(t_cmd, sizeof(t_cmd), "%s/%s/cmd", prefix, vehicle_id);
   snprintf(t_ack, sizeof(t_ack), "%s/%s/ack", prefix, vehicle_id);
+  snprintf(t_ota_req, sizeof(t_ota_req), "%s/%s/ota/req", prefix, vehicle_id);
+  snprintf(t_ota_data, sizeof(t_ota_data), "%s/%s/ota/data", prefix, vehicle_id);
 }
 
 void loadNvs() {
@@ -413,10 +423,12 @@ void handleCommand(const uint8_t* payload, unsigned len) {
                      ok ? "restart required" : err.c_str(), buf, sizeof(buf));
     transport::publish(t_ack, buf, false);
   } else if (strcmp(cmd, "ota") == 0) {
-    // Deliberately not implemented over LTE: a firmware image over a metered
-    // link, in a moving car, is a good way to end up with a bricked tracker in
-    // a parking garage. OTA runs over WiFi in the garage only (docs/07).
-    packet::buildAck(id, false, millis() - t0, "ota over wifi only", buf, sizeof(buf));
+    // Over any link, LTE included, but never while driving: the image goes to
+    // the idle slot and is booted only with a valid signature (ota/ota.h).
+    char why[64] = "";
+    const bool parked = rtc_mode != MODE_DRIVING && rtc_mode != MODE_MOVED;
+    const bool ok = ota::queue(doc.as<JsonVariantConst>(), parked, why, sizeof(why));
+    packet::buildAck(id, ok, millis() - t0, ok ? "ota: queued" : why, buf, sizeof(buf));
     transport::publish(t_ack, buf, false);
   }
 }
@@ -429,6 +441,8 @@ void onMessage(const char* topic, const uint8_t* payload, unsigned len) {
     }
   } else if (strcmp(topic, t_cmd) == 0) {
     handleCommand(payload, len);
+  } else if (strcmp(topic, t_ota_data) == 0) {
+    ota::onData(payload, len);
   }
 }
 
@@ -445,6 +459,7 @@ bool connectAndAnnounce() {
   if (n) transport::publish(t_info, buf, true);
   transport::subscribe(t_cfg);
   transport::subscribe(t_cmd);
+  if (ota::confirm()) publishEvent("ota_confirmed");
   return true;
 }
 
@@ -516,6 +531,8 @@ void setup() {
   power::begin();
   loadNvs();
   buildTopics();
+  ota::begin(t_ota_req, t_ota_data, t_ack);
+  ota::bootCheck();
 
   portal::setStatusProvider(statusJson);
   portal::begin();
@@ -557,6 +574,9 @@ void loop() {
   portal::loop();
   gnss::poll();
   transport::loop();
+  ota::loopCheck();
+  // Queued by the "ota" command; run here, outside the MQTT callback.
+  if (ota::pending()) ota::service();
 
   const float vbat = power::readVbat();
   updateMode(vbat);
