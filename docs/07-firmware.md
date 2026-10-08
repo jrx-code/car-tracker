@@ -212,3 +212,7 @@ z 1024 odpowiedź na `ping` szła 41 s zamiast poniżej 1 s (pomiar 2026-10-08).
 
 `[DO ZMIERZENIA]` czas przesłania obrazu ~0,9 MB po LTE i zużycie danych; całość
 nie była jeszcze uruchomiona na płytce. Pierwsze wgranie z OTA idzie przez USB.
+
+Klucz publiczny jest zapisany jako PEM, ale rdzeń buduje mbedtls bez parsera PEM
+(`CONFIG_MBEDTLS_PEM_PARSE_C` wyłączone): pierwsze OTA skończyło się `signature not
+valid`. Część base64 jest dekodowana w firmware i wczytywana jako DER.
