@@ -44,6 +44,7 @@ constexpr const char* kModemName = "none-wifi";
 // Survives deep sleep, unlike anything in the normal heap.
 RTC_DATA_ATTR VehicleMode rtc_mode = MODE_PARKED;
 RTC_DATA_ATTR uint32_t rtc_seq = 0;
+uint32_t seq_reserved = 0;  // NVS reservation, see nextSeq()
 RTC_DATA_ATTR uint16_t rtc_last_course = 0;
 RTC_DATA_ATTR uint32_t rtc_boot_count = 0;
 
@@ -91,7 +92,12 @@ void loadNvs() {
   vehicle_id[sizeof(vehicle_id) - 1] = '\0';
 
   prefs.begin("tracker", true);
-  rtc_seq = max(rtc_seq, prefs.getUInt("seq", 0));
+  // "seq2" holds a reservation (nextSeq()). The old "seq" was a stale lower
+  // bound, so a board coming from an older build skips well past it once.
+  const uint32_t reserved = prefs.isKey("seq2") ? prefs.getUInt("seq2", 0)
+                                                : prefs.getUInt("seq", 0) + 1000;
+  rtc_seq = max(rtc_seq, reserved);
+  seq_reserved = rtc_seq;  // everything up to here may have been used
   size_t n = prefs.getBytes("cfg", &cfg, sizeof(cfg));
   if (n != sizeof(cfg)) cfg = Config();  // struct changed, fall back to defaults
   prefs.end();
@@ -103,14 +109,24 @@ void saveCfg() {
   prefs.end();
 }
 
-void saveSeq() {
-  // Written every 16 sequence numbers, not every one: NVS has a finite erase
-  // budget and a gap in seq after a power cut is harmless, a worn flash is not.
-  if ((rtc_seq & 0x0F) != 0) return;
-  prefs.begin("tracker", false);
-  prefs.putUInt("seq", rtc_seq);
-  prefs.end();
+// seq must never repeat: the hub drops a (vehicle, seq) it already has, so a
+// reused number silently loses a position. The old code saved seq only when a
+// position happened to land on a multiple of 16, telemetry and events advanced
+// it without saving, and every boot restarted from the same stale value (113
+// on each restart in the 2026-10-08 field test). Now a block of 16 is reserved
+// in NVS before any number in it is used, and a boot starts past the
+// reservation: numbers may be skipped, never reused. One NVS write per 16.
+uint32_t nextSeq() {
+  if (++rtc_seq > seq_reserved) {
+    seq_reserved = rtc_seq + 16;
+    prefs.begin("tracker", false);
+    prefs.putUInt("seq2", seq_reserved);
+    prefs.end();
+  }
+  return rtc_seq;
 }
+
+void saveSeq() {}  // kept for the call sites; nextSeq() persists on its own
 
 uint32_t nowTs() {
   const uint32_t g = gnss::utc();
@@ -119,7 +135,7 @@ uint32_t nowTs() {
 }
 
 void publishEvent(const char* ev) {
-  const size_t n = packet::buildEvent(ev, ++rtc_seq, nowTs(),
+  const size_t n = packet::buildEvent(ev, nextSeq(), nowTs(),
                                       have_last_pos ? &last_pos : nullptr, buf,
                                       sizeof(buf));
   if (n) transport::publish(t_evt, buf, false);
@@ -375,7 +391,7 @@ void publishTelemetry() {
   tel.queued = store::count();
   tel.reset_reason = power::resetReason();
 
-  const size_t n = packet::buildTel(tel, rtc_mode, ++rtc_seq, nowTs(),
+  const size_t n = packet::buildTel(tel, rtc_mode, nextSeq(), nowTs(),
                                     portal::ipAddress().c_str(), buf, sizeof(buf));
   // Retained for the same reason as the position: battery voltage on a car
   // that is asleep is the whole point of this device, and it must survive a
@@ -421,7 +437,7 @@ void handleCommand(const uint8_t* payload, unsigned len) {
       delay(100);
     }
     if (got) {
-      rec.seq = ++rtc_seq;
+      rec.seq = nextSeq();
       rec.mode = rtc_mode;
       sendOrQueue(rec);
     }
@@ -647,7 +663,7 @@ void loop() {
     if (gnss::fill(rec, cfg.hdop_max)) {
       const bool due = (millis() - last_pos_ms) >= posIntervalMs();
       if (due || courseChangedEnough(rec)) {
-        rec.seq = ++rtc_seq;
+        rec.seq = nextSeq();
         rec.mode = rtc_mode;
         if (rec.ts == 0) {
           const uint32_t nt = transport::networkTime();
