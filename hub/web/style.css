@@ -301,6 +301,15 @@ body:not(.admin) .admin-only { display: none !important; }
 .adm-out { font-size: 12px; color: var(--muted); }
 .adm-out button { margin-left: 6px; }
 .adm-cmds { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+.ota-progress { display: flex; gap: 10px; align-items: center; margin: 8px 0 2px; }
+.ota-progress progress {
+  flex: 1; height: 8px; appearance: none; border: 0; border-radius: 4px;
+  background: var(--panel-2); overflow: hidden;
+}
+.ota-progress progress::-webkit-progress-bar { background: var(--panel-2); }
+.ota-progress progress::-webkit-progress-value { background: var(--accent); }
+.ota-progress progress::-moz-progress-bar { background: var(--accent); }
+.ota-progress .num { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 12px; }
 
 @media (max-width: 860px) {
   .adm-form { grid-template-columns: minmax(0, 1fr); }
