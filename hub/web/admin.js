@@ -213,6 +213,38 @@ function ackHtml(acks) {
     <span class="num">${a.ms != null ? `${a.ms} ms` : ""}</span></div>`).join("");
 }
 
+// OTA state as the hub sees it (GET /api/admin/vehicles/<id>, field "ota",
+// tracker_hub/ota.py status()). null means nothing has been staged since the
+// hub started. Display only: images are staged with scripts/ota_release.sh.
+function sizeText(bytes) {
+  if (bytes == null) return "-";
+  if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(2).replace(".", ",")} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} kB`;
+  return `${bytes} B`;
+}
+
+function otaHtml(ota) {
+  if (!ota) {
+    return `<div class="empty">Brak przygotowanego obrazu od startu huba.</div>`;
+  }
+  const total = ota.chunk ? Math.ceil(ota.size / ota.chunk) : null;
+  const pct = Math.round((ota.progress || 0) * 100);
+  const last = ota.last_request
+    ? `${when(ota.last_request)} (${ago(Date.now() / 1000 - ota.last_request)})`
+    : "jeszcze nie prosił";
+  const rows = [
+    ["Rozmiar obrazu", `${sizeText(ota.size)} (${ota.size} B)`],
+    ["SHA-256", ota.sha256 ? `${ota.sha256.slice(0, 12)}…` : null],
+    ["Wysłane kawałki", total != null ? `${ota.served} z ${total} (po ${ota.chunk} B)` : ota.served],
+    ["Przygotowany", when(ota.staged)],
+    ["Ostatnie żądanie", last],
+  ];
+  return `<div class="grid ident">${rows.map(([k, val]) =>
+    `<div><span class="k">${k}</span><span class="v">${esc(val ?? "-")}</span></div>`).join("")}</div>
+    <div class="ota-progress"><progress max="100" value="${pct}">${pct}%</progress>
+      <span class="num">${pct}%</span></div>`;
+}
+
 async function renderSettings(vehicleId) {
   const box = document.getElementById("tab-settings");
   if (!state.admin) { box.innerHTML = ""; return; }
@@ -229,6 +261,7 @@ async function renderSettings(vehicleId) {
   const s = data.settings;
   const cfg = data.cfg || {};
   let html = `<section class="adm"><h3>Łączność i tożsamość</h3>${identityHtml(data)}</section>`;
+  html += `<section class="adm"><h3>Aktualizacja firmware (OTA)</h3>${otaHtml(data.ota)}</section>`;
 
   if (!s) {
     html += `<div class="badrow adm-note">Panel urządzenia nieosiągalny: ${esc(data.settings_error)}.
