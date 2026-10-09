@@ -56,6 +56,10 @@
 
 #include "secrets.h"
 
+#if !defined(PROBE_AP_SSID) || !defined(PROBE_AP_PASS)
+#error "secrets.h has no PROBE_AP_SSID / PROBE_AP_PASS: copy them from secrets.example.h"
+#endif
+
 // Deliberately not wired to the transceiver: the driver input is held at VCC in
 // hardware. TWAI requires a TX pin, so it drives a pin with nothing on it.
 constexpr gpio_num_t PIN_CAN_TX = GPIO_NUM_19;
@@ -334,8 +338,13 @@ void handleRoot() {
     h += "<tr><td>Bledy RX / zgubione</td><td>" + String(st.rx_error_counter) + " / " +
          String(st.rx_missed_count) + "</td></tr>";
   }
-  h += "<tr><td>WiFi</td><td>" + wifi_state + ", " + String(WiFi.RSSI()) + " dBm, " +
-       WiFi.localIP().toString() + "</td></tr>";
+  if (WiFi.getMode() == WIFI_AP) {
+    h += "<tr><td>WiFi</td><td>" + wifi_state + ", " + WiFi.softAPIP().toString() + ", " +
+         String(WiFi.softAPgetStationNum()) + " podlaczonych</td></tr>";
+  } else {
+    h += "<tr><td>WiFi</td><td>" + wifi_state + ", " + String(WiFi.RSSI()) + " dBm, " +
+         WiFi.localIP().toString() + "</td></tr>";
+  }
   h += "<tr><td>Uptime</td><td>" + String((millis() - boot_ms) / 1000) + " s</td></tr>";
   h += F("</table>");
 
@@ -457,7 +466,20 @@ void setup() {
     Serial.printf("\nOtworz: http://%s/  albo http://%s.local/\n",
                   WiFi.localIP().toString().c_str(), MDNS_NAME);
   } else {
-    Serial.println("\nWiFi: nie polaczono. Sonda dziala dalej przez USB.");
+    // Away from the home network (in the car, issue #20): open an access point
+    // with the same pages, so /scan and /dump.csv work from a phone.
+    WiFi.disconnect(true);
+    WiFi.mode(WIFI_AP);
+    if (WiFi.softAP(PROBE_AP_SSID, PROBE_AP_PASS)) {
+      wifi_state = String("punkt dostepowy ") + PROBE_AP_SSID;
+      MDNS.begin(MDNS_NAME);
+      Serial.printf("\nWiFi: nie polaczono, punkt dostepowy \"%s\". Otworz: http://%s/\n",
+                    PROBE_AP_SSID, WiFi.softAPIP().toString().c_str());
+    } else {
+      // softAP refuses a WPA2 password shorter than 8 characters.
+      Serial.println("\nWiFi: nie polaczono, punkt dostepowy nie wstal (haslo 8-63 znaki?). "
+                     "Sonda dziala dalej przez USB.");
+    }
   }
 
   server.on("/", handleRoot);
