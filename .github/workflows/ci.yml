@@ -78,6 +78,8 @@ jobs:
           /tmp/test_hostcheck
           g++ -std=c++17 -Wall -Werror -I firmware/src firmware/test/host/test_cgnssinfo.cpp -o /tmp/test_cgnssinfo
           /tmp/test_cgnssinfo
+          g++ -std=c++17 -Wall -Werror -I firmware/src firmware/test/host/test_seqreserve.cpp -o /tmp/test_seqreserve
+          /tmp/test_seqreserve
 
       - name: Provide compile-time config.h
         # config.h is gitignored; example placeholders are enough to compile.
