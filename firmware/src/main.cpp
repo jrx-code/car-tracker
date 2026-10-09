@@ -17,6 +17,7 @@
 #include "state.h"
 #include "telemetry/packet.h"
 #include "telemetry/store.h"
+#include "util/gnssmode.h"
 
 namespace {
 
@@ -64,8 +65,6 @@ uint32_t voltage_low_since_ms = 0;
 uint32_t drive_hint_since_ms = 0;
 // GNSS-only mode detection (no divider, no accelerometer), see updateModeFromGnss().
 uint32_t gnss_sample_ms = 0;
-uint32_t gnss_slow_since_ms = 0;
-uint32_t gnss_nofix_since_ms = 0;
 bool warned_low_battery = false;
 PosRecord last_pos = {};
 bool have_last_pos = false;
@@ -152,41 +151,10 @@ void setMode(VehicleMode m, const char* event) {
 void pumpModemGnss();
 
 // Neither a voltage divider nor an accelerometer: the PoC board on a power
-// bank. Without this the mode never left PARKED, so no track could ever be
-// recorded and PoC criterion 1 was out of reach (review 2026-10-08). Power is
-// no concern on a bank, so the receiver stays on and GNSS speed decides.
-// [DO ZMIERZENIA] thresholds: set from the first drive, not from data yet.
-constexpr float kGnssDriveKmh = 10.0f;      // speed that may start a trip...
-constexpr float kGnssLeaveM = 150.0f;       // ...but only this far from where it parked
-constexpr float kGnssStayM = 50.0f;         // within this radius for kGnssStopMs: parked
-constexpr uint32_t kGnssStopMs = 180000UL;  // standing this long: trip_end
-constexpr uint32_t kGnssLostMs = 600000UL;  // no fix this long: trip_end too
+// bank. The receiver stays on and GNSS decides; the decision and its
+// thresholds are in util/gnssmode.h, this function only samples and applies it.
 constexpr uint32_t kGnssSampleMs = 5000UL;  // sampling period while parked
-
-// Speed alone failed on the bench (2026-10-08): a board lying still reported
-// 0 -> 6.9 -> 3.9 km/h with HDOP ~2, opened a trip and never closed it, since
-// the jitter kept resetting a speed-based stop timer. Displacement filters
-// that: parked-to-driving needs the position to leave the parking spot,
-// driving-to-parked needs it to stay inside a small circle.
-struct GnssAnchor {
-  bool set = false;
-  int32_t lat_e7 = 0, lon_e7 = 0;
-};
-GnssAnchor park_anchor, stop_anchor;
-
-void setAnchor(GnssAnchor& a, const PosRecord& r) {
-  a.set = true;
-  a.lat_e7 = r.lat_e7;
-  a.lon_e7 = r.lon_e7;
-}
-
-// Equirectangular distance; plenty for a few hundred metres.
-float metresFrom(const GnssAnchor& a, const PosRecord& r) {
-  const float lat = r.lat_e7 * 1e-7f * 0.0174533f;
-  const float dy = (r.lat_e7 - a.lat_e7) * 1e-7f * 110540.0f;
-  const float dx = (r.lon_e7 - a.lon_e7) * 1e-7f * 111320.0f * cosf(lat);
-  return sqrtf(dx * dx + dy * dy);
-}
+gnssmode::State gnss_mode;
 
 void updateModeFromGnss(uint32_t now) {
   if (!gnss::enabled()) gnss::enable();
@@ -200,39 +168,16 @@ void updateModeFromGnss(uint32_t now) {
   }
   PosRecord rec = {};
   const bool fix = gnss::fill(rec, cfg.hdop_max);
-  const float kmh = rec.spd_ckmh / 100.0f;
-
-  if (rtc_mode == MODE_DRIVING) {
-    // A lost fix (tunnel, garage) is not a stop; only a long one ends the trip.
-    if (!fix) {
-      if (gnss_nofix_since_ms == 0) gnss_nofix_since_ms = now;
-      if (now - gnss_nofix_since_ms > kGnssLostMs) {
-        gnss_nofix_since_ms = 0;
-        park_anchor.set = false;
-        setMode(MODE_PARKED, "trip_end");
-      }
-      return;
-    }
-    gnss_nofix_since_ms = 0;
-    if (!stop_anchor.set || metresFrom(stop_anchor, rec) > kGnssStayM) {
-      setAnchor(stop_anchor, rec);
-      gnss_slow_since_ms = now;
-    } else if (now - gnss_slow_since_ms > kGnssStopMs) {
-      setAnchor(park_anchor, rec);
-      stop_anchor.set = false;
+  switch (gnssmode::update(gnss_mode, rtc_mode == MODE_DRIVING, now, fix, rec.lat_e7,
+                           rec.lon_e7, rec.spd_ckmh / 100.0f)) {
+    case gnssmode::Change::kTripStart:
+      setMode(MODE_DRIVING, "trip_start");
+      break;
+    case gnssmode::Change::kTripEnd:
       setMode(MODE_PARKED, "trip_end");
-    }
-    return;
-  }
-
-  if (!fix) return;
-  if (!park_anchor.set) {
-    setAnchor(park_anchor, rec);  // first fix since boot or since parking
-    return;
-  }
-  if (kmh >= kGnssDriveKmh && metresFrom(park_anchor, rec) > kGnssLeaveM) {
-    stop_anchor.set = false;
-    setMode(MODE_DRIVING, "trip_start");
+      break;
+    case gnssmode::Change::kNone:
+      break;
   }
 }
 
