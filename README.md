@@ -23,10 +23,32 @@ voltage and the tow alarm never pass through it.
 
 ## What works today
 
+- **MQTT over TLS on LTE.** First end-to-end connection on 2026-10-08 from a
+  LilyGO T-A7670E to a broker reachable from the internet. TLS is started
+  explicitly for any port, and a failed handshake closes the socket before a
+  single MQTT byte is sent (`docs/09` section 9.3). TinyGSM 0.12 needs a patch
+  for this modem, applied before the build.
+- **Position from the modem's GNSS.** The A7670E-FASE has its own receiver; the
+  `+CGNSSINFO` parser was fixed against published fix lines and the board got its
+  first fix on 2026-10-08. A failed locate now answers with the last raw
+  receiver line, so "still searching" and "fix rejected" can be told apart
+  remotely.
+- **OTA over the MQTT link**, LTE or WiFi, parked only. The image is signed
+  (ECDSA P-256 over its SHA-256) and the signature is checked before the first
+  byte is fetched; the new image gets a trial boot and is rolled back if it
+  fails to reach the broker within 10 minutes or restarts more than 3 times.
+  Two successful updates on the board, about 13-14 minutes for a 0.93 MB image.
+  Details in `docs/07` section 7.7.
+- **Trips without sensors.** With no voltage divider and no accelerometer the
+  GNSS position decides: a trip starts only after leaving the parking spot by
+  more than 150 m and ends after 3 minutes inside a 50 m circle or 10 minutes
+  without a fix. Thresholds are still `[DO ZMIERZENIA]`.
+- **Sequence numbers never repeat** across restarts: they are reserved in blocks
+  of 16 in NVS, so numbers may be skipped but are never reused.
 - **GNSS on the bench.** NEO-6M, 3D fix, HDOP 1.6 with 6 satellites indoors,
   151 s cold start. Numbers and method in `hardware/pomiary.md`.
-- **Firmware builds** in five environments (`wifi_dev` plus four modem variants)
-  and two standalone probes.
+- **Firmware builds** in all seven environments (`wifi_dev`, `lilygo_wifi` and
+  five modem variants) and two standalone probes.
 - **On-device configuration portal.** Vehicle identity, WiFi, an emergency access
   point, MQTT with a pasted CA, LTE, every hardware pin, OTA. Settings live in
   NVS, so `config.h` is only a factory default.
@@ -51,12 +73,23 @@ no voltage divider fitted.*
 
 ## What does not work yet
 
-- **No LTE.** The transport abstraction and four modem environments exist and
-  compile; no modem has been connected. Three boards are on order.
+- **LTE registration after a cold start is unreliable** (issue #30). The first
+  attach after boot used to fail 4 of 4 times; holding the modem RESET line low
+  helped once in the field (online 31 s after boot), which is one sample, not a
+  result. Registration has taken up to 66 s, so the firmware now waits 120 s.
+- **GNSS speed unit not confirmed** (issue #11). The field layout of
+  `+CGNSSINFO` is now taken from published fix lines, but the unit of the speed
+  field has not been checked against a known speed.
+- **OTA rollback never triggered on the board.** The trial-boot logic is in the
+  firmware, but neither a failed broker connection nor a restart loop after an
+  update has been tested.
 - **No power from the OBD socket.** The design is in `docs/04`, but the current
   budget has not been measured and the undervoltage cutoff has not been proven.
   Until both are done, the device runs off a power bank. This is deliberate: a
   tracker that flattens a car battery is worse than no tracker.
+- **No accelerometer.** The LIS3DH driver exists, but the bench board runs
+  without the sensor (the trip logic above exists because of that), so motion
+  detection and the tow alarm have not run on hardware.
 - **No data from the vehicle.** Reading the CAN bus is planned and a sniffing
   probe is written, but no transceiver has been connected to a car.
 - **Nothing measured on a car.** Idle current draw, the voltage profile, and
