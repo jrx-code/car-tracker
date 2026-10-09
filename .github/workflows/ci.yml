@@ -94,3 +94,10 @@ jobs:
           -e sim7600e
           -e lilygo_a7670
           -e lilygo_wifi
+
+      - name: Build the CAN probe
+        # firmware/probe-can is a separate PlatformIO project; its secrets.h is
+        # gitignored, the example placeholders are enough to compile.
+        run: |
+          cp firmware/probe-can/src/secrets.example.h firmware/probe-can/src/secrets.h
+          pio run -d firmware/probe-can
