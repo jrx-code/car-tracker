@@ -17,6 +17,7 @@
 #include "state.h"
 #include "telemetry/packet.h"
 #include "telemetry/store.h"
+#include "util/seqreserve.h"
 
 namespace {
 
@@ -92,11 +93,11 @@ void loadNvs() {
   vehicle_id[sizeof(vehicle_id) - 1] = '\0';
 
   prefs.begin("tracker", true);
-  // "seq2" holds a reservation (nextSeq()). The old "seq" was a stale lower
-  // bound, so a board coming from an older build skips well past it once.
-  const uint32_t reserved = prefs.isKey("seq2") ? prefs.getUInt("seq2", 0)
-                                                : prefs.getUInt("seq", 0) + 1000;
-  rtc_seq = max(rtc_seq, reserved);
+  // "seq2" holds a reservation (nextSeq(), util/seqreserve.h). Only one of the
+  // two keys is read, as before.
+  const bool has_seq2 = prefs.isKey("seq2");
+  rtc_seq = seqreserve::bootValue(rtc_seq, has_seq2, has_seq2 ? prefs.getUInt("seq2", 0) : 0,
+                                  has_seq2 ? 0 : prefs.getUInt("seq", 0));
   seq_reserved = rtc_seq;  // everything up to here may have been used
   size_t n = prefs.getBytes("cfg", &cfg, sizeof(cfg));
   if (n != sizeof(cfg)) cfg = Config();  // struct changed, fall back to defaults
@@ -109,22 +110,14 @@ void saveCfg() {
   prefs.end();
 }
 
-// seq must never repeat: the hub drops a (vehicle, seq) it already has, so a
-// reused number silently loses a position. The old code saved seq only when a
-// position happened to land on a multiple of 16, telemetry and events advanced
-// it without saving, and every boot restarted from the same stale value (113
-// on each restart in the 2026-10-08 field test). Now a block of 16 is reserved
-// in NVS before any number in it is used, and a boot starts past the
-// reservation: numbers may be skipped, never reused. One NVS write per 16.
-uint32_t nextSeq() {
-  if (++rtc_seq > seq_reserved) {
-    seq_reserved = rtc_seq + 16;
-    prefs.begin("tracker", false);
-    prefs.putUInt("seq2", seq_reserved);
-    prefs.end();
-  }
-  return rtc_seq;
+void saveSeqReservation(uint32_t reserved) {
+  prefs.begin("tracker", false);
+  prefs.putUInt("seq2", reserved);
+  prefs.end();
 }
+
+// seq must never repeat; why and how in util/seqreserve.h.
+uint32_t nextSeq() { return seqreserve::next(rtc_seq, seq_reserved, saveSeqReservation); }
 
 void saveSeq() {}  // kept for the call sites; nextSeq() persists on its own
 
