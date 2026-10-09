@@ -21,6 +21,8 @@ Identyfikator jest w NVS, nie w kompilacji, zgodnie z założeniem Z6.
 | `cartracker/<id>/trip` | hub -> HA | 1 | tak | bieżący lub ostatni przejazd: dystans, czas, prędkości (5.10) |
 | `homeassistant/…/config` | hub -> HA | 1 | tak | MQTT discovery, 21 encji na pojazd (patrz `08` punkt 8.3) |
 | `cartracker/<id>/ack` | urządzenie -> HA | 1 | nie | potwierdzenie komendy i wyniku |
+| `cartracker/<id>/ota/req` | urządzenie -> hub | 0 | nie | prośba o kawałek obrazu OTA, JSON `off`, `len` (5.11) |
+| `cartracker/<id>/ota/data` | hub -> urządzenie | 0 | nie | kawałek obrazu: 4 bajty offsetu little-endian plus dane, binarnie (5.11) |
 
 `cfg` jest retained celowo: urządzenie po restarcie w garażu bez zasięgu i tak dostanie
 ostatnią konfigurację przy pierwszym połączeniu, bez czekania na HA.
@@ -108,7 +110,11 @@ najprostszym wskaźnikiem, że coś jest nie tak z łącznością, zanim urządz
 ```
 
 Wartości `ev`: `trip_start`, `trip_end`, `motion_alarm`, `battery_low`, `hibernate`,
-`wakeup`, `power_lost`, `power_restored`, `gnss_lost`, `gnss_ok`.
+`wakeup`, `power_lost`, `power_restored`, `gnss_lost`, `gnss_ok`, `ota_confirmed`.
+
+`ota_confirmed` idzie raz, przy pierwszym połączeniu z brokerem po próbnym starcie
+nowego obrazu z OTA (07 punkt 7.7). Od tej chwili obraz jest zatwierdzony i nie
+zostanie cofnięty.
 
 `power_lost` jest wysyłane z energii zgromadzonej w kondensatorze po odpięciu wtyku OBD,
 o ile modem jest w tym momencie zarejestrowany. Jeżeli nie zdąży, HA i tak zobaczy
@@ -158,13 +164,24 @@ gdzie `auto` bierze pierwszy fix z lepszym HDOP.
 | `ping` | odpowiedź na `ack`, mierzy czas obiegu |
 | `locate` | wybudza GNSS i modem, wysyła jedną pozycję niezależnie od stanu |
 | `reboot` | restart urządzenia |
-| `ota` | pobranie firmware, dozwolone tylko po WiFi, patrz 07 |
+| `ota` | pobranie firmware przez MQTT, po LTE albo WiFi, tylko na postoju (5.11, 07 punkt 7.7) |
 | `set_id` | zmiana `vehicle_id` w NVS, wymaga potwierdzenia w polu `confirm` |
 
 Odpowiedź na `cartracker/<id>/ack`:
 ```json
 { "id": "a1b2", "ok": true, "ms": 812, "msg": "" }
 ```
+
+Nieudane `locate` (brak fixu w ciągu 60 s) ma `ok: false`, a w `msg` ostatnią surową
+odpowiedź odbiornika z modemu, wszystko po prefiksie `+CGNSSINFO:`:
+
+```json
+{ "id": "a1b2", "ok": false, "ms": 60012, "msg": "no fix; CGNSSINFO: ,,,,,,,,,,,,,,," }
+```
+
+Same przecinki znaczą, że odbiornik dalej szuka. Linia z cyframi to fix, którego
+parser nie przyjął, i to jest błąd do zgłoszenia. Przed pierwszą odpowiedzią modemu
+(i na płytce bez GNSS w modemie) po `CGNSSINFO:` nie ma nic.
 
 Komendy nie mają retained. Retained komenda odtwarzałaby się przy każdym połączeniu,
 co przy `reboot` daje pętlę restartów. To jest częsty błąd w tego typu integracjach
@@ -188,7 +205,7 @@ oszczędność transferu, która i tak mieści się w pakiecie danych.
   "name": "MX-5 ND1",
   "plate": "ZS12345",
   "vin": "JM1NDAM75M0300001",
-  "fw": "0.1.0",
+  "fw": "0.1.0+1e8073c",
   "modem": "none-wifi",
   "imei": "AA:BB:CC:DD:EE:FF",
   "iccid": "",
@@ -198,6 +215,10 @@ oszczędność transferu, która i tak mieści się w pakiecie danych.
 ```
 
 Retained, publikowane raz po połączeniu z brokerem.
+
+`fw` ma postać `<wersja>+<krótki hash commita>`, na przykład `0.1.0+1e8073c`. Hash
+wstawia `platformio.ini` przy budowaniu (`git rev-parse --short HEAD`), a poza
+repozytorium git jest `dev`. Po OTA to jedyny dowód, który build faktycznie działa.
 
 `name`, `plate` i `vin` to tożsamość auta, w którym siedzi płytka. Trzymamy ją
 w NVS urządzenia, a nie w agregatorze, bo wtedy jest jedno miejsce do zmiany
@@ -232,3 +253,49 @@ także po restarcie Home Assistanta.
 To jedyny temat, od którego zależą encje HA, a którego nie publikuje samo
 urządzenie. Gdy agregator stanie, cztery sensory przejazdu się zestarzeją,
 a cała reszta encji działa dalej, bo czyta tematy urządzenia.
+
+## 5.11 Aktualizacja firmware (`ota`, `ota/req`, `ota/data`)
+
+Pełny przebieg i zabezpieczenia są w 07 punkt 7.7, tu jest sam format wiadomości.
+Źródła: `firmware/src/ota/ota.cpp`, `hub/tracker_hub/ota.py`.
+
+Komenda na `cmd`, wysyłana przez huba po przyjęciu obrazu:
+
+```json
+{ "id": "3f2a", "cmd": "ota", "size": 931840, "sha256": "9c1e...64 znaki hex", "sig": "MEUCIQ...", "chunk": 1024 }
+```
+
+| Pole | Typ | Znaczenie |
+|---|---|---|
+| `size` | uint32 | rozmiar obrazu w bajtach, musi się zmieścić w nieaktywnym slocie OTA |
+| `sha256` | string | SHA-256 całego obrazu, 64 znaki hex |
+| `sig` | string | podpis ECDSA P-256 skrótu, DER zakodowany base64 |
+| `chunk` | uint16 | rozmiar kawałka, 256-1536 bajtów (domyślnie 1024), ograniczony przez `MQTT_MAX_PACKET_SIZE` 2048 |
+
+Urządzenie od razu odpowiada `ack` z `ok: true` i `msg` `ota: queued` albo
+`ok: false` z powodem, na przykład `ota: refused while driving`,
+`ota: disabled in settings`, `ota: image size does not fit the slot`, `ota: bad sha256`,
+`ota: bad signature encoding`, `ota: signature not valid`. Podpis jest sprawdzany przed
+pobraniem pierwszego bajtu. Dalszy postęp przychodzi jako kolejne `ack` z tym samym `id`:
+`ota: downloading`, potem `ota: <rozmiar> bytes in <s> s, rebooting into the new image`
+albo błąd (`ota: chunk did not arrive`, `ota: flash write failed`,
+`ota: image hash does not match the signed one`).
+
+Po przyjęciu komendy urządzenie subskrybuje `ota/data` i prosi o kawałki po kolei,
+jeden naraz, na `ota/req`:
+
+```json
+{ "off": 0, "len": 1024 }
+```
+
+`off` to offset w obrazie, `len` liczba bajtów (ostatni kawałek bywa krótszy). Hub
+odpowiada na `ota/data` wiadomością binarną: 4 bajty offsetu little-endian, a za nimi
+dokładnie `len` bajtów obrazu. Urządzenie przyjmuje tylko kawałek z offsetem, o który
+właśnie prosi; inny ignoruje. Brakujący kawałek zamawia ponownie po 15 s, najwyżej
+4 razy. Dlatego oba tematy idą z QoS 0 i bez retained: ponowienie na poziomie brokera
+tylko dublowałoby kawałki. Hub odrzuca prośby wykraczające poza obraz albo dłuższe
+niż 1536 bajtów, a bez przygotowanego obrazu nie odpowiada wcale.
+
+Obraz ~0,9 MB w kawałkach po 1024 bajty to około 900 par `ota/req` i `ota/data`.
+Odbiorcy subskrybujący `cartracker/#` (na przykład integracja HA) muszą pomijać
+`ota/#`, a nie próbować dekodować `ota/data` jako JSON.
