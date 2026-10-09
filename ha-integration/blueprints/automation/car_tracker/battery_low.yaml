@@ -1,0 +1,74 @@
+blueprint:
+  name: "Car tracker: akumulator siada"
+  description: >-
+    Powiadomienie, gdy napięcie akumulatora auta jest poniżej progu przez zadany
+    czas. Wzorowane na przykładzie z docs/08-ha-integracja.md §8.6.
+
+    Encję napięcia wybierz z listy: jej nazwę ustala MQTT discovery huba
+    (sensor „Napięcie akumulatora” urządzenia pojazdu), więc blueprint niczego
+    nie zakłada z góry.
+  domain: automation
+  source_url: https://github.com/jrx-code/car-tracker/blob/main/ha-integration/blueprints/automation/car_tracker/battery_low.yaml
+  input:
+    voltage_sensor:
+      name: Sensor napięcia akumulatora
+      description: Sensor napięcia pojazdu, utworzony przez discovery huba.
+      selector:
+        entity:
+          filter:
+            - domain: sensor
+              device_class: voltage
+    threshold:
+      name: Próg napięcia
+      description: Powiadom, gdy napięcie spadnie poniżej tej wartości.
+      default: 12.2
+      selector:
+        number:
+          min: 10.0
+          max: 14.0
+          step: 0.1
+          unit_of_measurement: V
+          mode: box
+    duration:
+      name: Czas poniżej progu
+      description: Jak długo napięcie musi być poniżej progu, zanim przyjdzie powiadomienie.
+      default:
+        hours: 1
+        minutes: 0
+        seconds: 0
+      selector:
+        duration: {}
+    notify_action:
+      name: Usługa powiadomień
+      description: >-
+        Pełna nazwa akcji powiadomienia, na przykład `notify.mobile_app_telefon`.
+      default: notify.notify
+      selector:
+        text: {}
+    title:
+      name: Tytuł powiadomienia
+      default: "Akumulator auta"
+      selector:
+        text: {}
+
+mode: single
+max_exceeded: silent
+
+variables:
+  voltage_sensor: !input voltage_sensor
+  notify_action: !input notify_action
+  title: !input title
+
+triggers:
+  - trigger: numeric_state
+    entity_id: !input voltage_sensor
+    below: !input threshold
+    for: !input duration
+
+actions:
+  - action: "{{ notify_action }}"
+    data:
+      title: "{{ title }}"
+      message: >-
+        {{ state_attr(voltage_sensor, 'friendly_name') or voltage_sensor }}:
+        napięcie {{ states(voltage_sensor) }} V, czas na prostownik.

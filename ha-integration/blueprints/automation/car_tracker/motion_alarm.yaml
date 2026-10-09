@@ -1,0 +1,62 @@
+blueprint:
+  name: "Car tracker: ruch auta na postoju"
+  description: >-
+    Powiadomienie z linkiem do mapy, gdy tracker zgłosi ruch auta bez zapłonu
+    (zdarzenie `car_tracker_event` z `event: motion_alarm`). Wzorowane na
+    przykładzie z docs/08-ha-integracja.md §8.6.
+
+    Zdarzenie `car_tracker_event` wystawia na szynę HA integracja
+    `custom_components/car_tracker`, patrz docs/08 §8.3 i §8.6.
+  domain: automation
+  source_url: https://github.com/jrx-code/car-tracker/blob/main/ha-integration/blueprints/automation/car_tracker/motion_alarm.yaml
+  input:
+    vehicle_id:
+      name: Identyfikator pojazdu
+      description: >-
+        `vehicle_id` z NVS urządzenia. Puste pole oznacza dowolny pojazd.
+      default: ""
+      selector:
+        text: {}
+    notify_action:
+      name: Usługa powiadomień
+      description: >-
+        Pełna nazwa akcji powiadomienia, na przykład `notify.mobile_app_telefon`.
+      default: notify.notify
+      selector:
+        text: {}
+    title:
+      name: Tytuł powiadomienia
+      default: "Alarm: ruch auta na postoju"
+      selector:
+        text: {}
+
+mode: queued
+max: 5
+
+variables:
+  vehicle_filter: !input vehicle_id
+  notify_action: !input notify_action
+  title: !input title
+
+triggers:
+  - trigger: event
+    event_type: car_tracker_event
+    event_data:
+      event: motion_alarm
+
+conditions:
+  - condition: template
+    value_template: >-
+      {{ vehicle_filter | trim == '' or
+         trigger.event.data.vehicle_id == vehicle_filter | trim }}
+
+actions:
+  - variables:
+      lat: "{{ trigger.event.data.lat | default('') }}"
+      lon: "{{ trigger.event.data.lon | default('') }}"
+  - action: "{{ notify_action }}"
+    data:
+      title: "{{ title }}"
+      message: >-
+        Ruch auta {{ trigger.event.data.vehicle_id }} bez zapłonu.
+        {% if lat != '' and lon != '' %}https://maps.google.com/?q={{ lat }},{{ lon }}{% else %}Brak ostatniej pozycji w zdarzeniu.{% endif %}
