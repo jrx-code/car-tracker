@@ -211,6 +211,20 @@ automation:
 
 Nazwy encji do sprawdzenia po instalacji, nie zakładać ich z góry.
 
+Oba przykłady są gotowe jako blueprinty w
+[`ha-integration/blueprints/automation/car_tracker/`](../ha-integration/blueprints/automation/car_tracker/):
+`battery_low.yaml` („akumulator siada”) i `motion_alarm.yaml` („ruch auta na
+postoju”). Encja napięcia, pojazd i usługa powiadomień są wejściami blueprintu,
+nie nazwami na sztywno. Instalacja: skopiować pliki do
+`/config/blueprints/automation/car_tracker/` albo zaimportować przez URL pliku
+(Ustawienia, Automatyzacje i sceny, Blueprinty, Importuj), potem utworzyć
+automatyzację z blueprintu.
+
+Uwaga: zdarzenie `car_tracker_event` wystawia na szynę integracja
+`custom_components/car_tracker`. Samo discovery z huba (8.3) go nie tworzy, tam
+ruch na postoju widać jako binary_sensor „Ruch na postoju” (`st == moved`
+w `tel`). Blueprint „akumulator siada” działa z encją z discovery.
+
 ## 8.7 Historia i retencja
 
 Surowe pozycje w recorderze i w InfluxDB mają krótszą retencję niż reszta domu
